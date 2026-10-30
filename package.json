@@ -1,0 +1,75 @@
+{
+  "name": "echo-chamber",
+  "productName": "Echo Chamber",
+  "version": "0.2.0",
+  "description": "Launchpad soundboard that plays sounds through your mic into Discord and game voice chat.",
+  "main": "main.js",
+  "author": "Echo Chamber",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.echochamber.app",
+    "productName": "Echo Chamber",
+    "files": [
+      "main.js",
+      "preload.js",
+      "tts.js",
+      "src/**/*"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Echo Chamber",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Echo-Chamber-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.music",
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Echo Chamber passes your microphone through to voice chat along with your sounds."
+      },
+      "icon": "build/icon.png",
+      "artifactName": "Echo-Chamber-${version}-${arch}.${ext}"
+    },
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/**",
+      "node_modules/sharp/**",
+      "node_modules/@img/**"
+    ],
+    "icon": "build/icon.png"
+  },
+  "dependencies": {
+    "kokoro-js": "^1.2.0"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  }
+}

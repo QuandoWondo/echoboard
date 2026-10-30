@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:;">
+  <title>Echo Chamber</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">ECHO CHAMBER</div>
+    <div class="chips">
+      <button id="chip-midi" class="chip"></button>
+      <button id="chip-out" class="chip"></button>
+      <button id="chip-mic" class="chip"></button>
+    </div>
+    <div class="top-actions">
+      <button id="btn-stopall" class="btn danger" title="Stop all sounds (Esc, or Ctrl/Cmd+Shift+K from anywhere)">&#9632; Stop all</button>
+      <button id="btn-settings" class="btn">Settings</button>
+      <button id="btn-help" class="btn icon" title="Setup help">?</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="board">
+      <div class="grid-wrap"><div id="grid" class="grid"></div></div>
+      <p class="hint">Click a pad to edit it &middot; double-click or Space to preview &middot; drop audio files onto pads</p>
+
+      <section id="tts" class="tts">
+        <textarea id="tts-text" rows="2" maxlength="1000" placeholder="Type something for voice chat to hear&hellip;"></textarea>
+        <input id="tts-style" class="tts-style hidden" type="text" maxlength="300" placeholder="Voice style (optional), e.g. hyped sports announcer, sleepy pirate">
+        <div class="tts-bar">
+          <select id="tts-provider" class="pill-select" title="Voice engine">
+            <option value="kokoro">Free AI voices</option>
+            <option value="system">Built-in voices</option>
+            <option value="openai">OpenAI voices</option>
+            <option value="elevenlabs">ElevenLabs voices</option>
+          </select>
+          <select id="tts-voice" class="pill-select" title="Voice"></select>
+          <span id="tts-status" class="tts-status"></span>
+          <span class="spacer"></span>
+          <span id="tts-count" class="muted tts-count"></span>
+          <button id="tts-save" class="btn" title="Save this line as a sound on the selected pad">Save to pad</button>
+          <button id="tts-speak" class="btn primary" title="Speak into voice chat (Enter)">Speak</button>
+        </div>
+        <div id="tts-history" class="tts-history"></div>
+      </section>
+    </section>
+
+    <aside class="editor">
+      <div class="editor-head">
+        <h2 id="ed-title">Pad</h2>
+        <span id="ed-trigger" class="muted"></span>
+      </div>
+
+      <div class="field">
+        <label>Sound</label>
+        <div id="ed-file" class="filebox muted">No sound yet</div>
+        <div class="row">
+          <button id="ed-pick" class="btn primary">Choose sound&hellip;</button>
+          <button id="ed-preview" class="btn">&#9654; Preview</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="ed-name">Name</label>
+        <input id="ed-name" type="text" maxlength="40" placeholder="Pad name">
+      </div>
+
+      <div class="field">
+        <label for="ed-volume">Volume <span id="ed-volume-val" class="muted"></span></label>
+        <input id="ed-volume" type="range" min="0" max="150" step="1">
+      </div>
+
+      <div class="field">
+        <label>Color</label>
+        <div id="ed-colors" class="swatches"></div>
+      </div>
+
+      <div class="field">
+        <label for="ed-mode">When pressed</label>
+        <select id="ed-mode">
+          <option value="oneshot">One-shot (press again to restart)</option>
+          <option value="toggle">Toggle (press again to stop)</option>
+          <option value="hold">Hold (plays while held)</option>
+          <option value="loop">Loop (press again to stop)</option>
+        </select>
+      </div>
+
+      <label class="check">
+        <input id="ed-choke" type="checkbox">
+        <span>Cut off other sounds when this plays</span>
+      </label>
+
+      <div class="field">
+        <label>Launchpad button</label>
+        <div class="row">
+          <button id="ed-learn" class="btn">Learn button</button>
+          <span id="ed-learn-msg" class="muted"></span>
+        </div>
+      </div>
+
+      <div class="editor-foot">
+        <button id="ed-clear" class="btn ghost">Clear pad</button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Settings -->
+  <div id="settings" class="overlay hidden">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Settings</h2>
+        <button class="btn icon close" data-close="settings">&times;</button>
+      </div>
+
+      <h3>Controller</h3>
+      <div class="field">
+        <label for="set-midi-in">Buttons from</label>
+        <select id="set-midi-in"></select>
+      </div>
+      <div class="field">
+        <label for="set-midi-out">Pad lights to</label>
+        <select id="set-midi-out"></select>
+      </div>
+      <div class="field">
+        <label>Stop-all button</label>
+        <div class="row">
+          <button id="set-stop-learn" class="btn">Learn button</button>
+          <span id="set-stop-label" class="muted"></span>
+        </div>
+      </div>
+
+      <h3>Voice chat</h3>
+      <div class="field">
+        <label for="set-cable">Send to (virtual cable)</label>
+        <select id="set-cable"></select>
+        <p class="note">Windows: <b>CABLE Input</b>. Mac: <b>BlackHole 2ch</b>. Then pick the matching cable as your mic in Discord or the game.</p>
+      </div>
+      <div class="field">
+        <label for="set-mic">Your microphone</label>
+        <select id="set-mic"></select>
+      </div>
+      <label class="check">
+        <input id="set-mic-on" type="checkbox">
+        <span>Pass my mic through (so friends hear me too)</span>
+      </label>
+      <div class="field">
+        <label for="set-mic-vol">Mic volume <span id="set-mic-vol-val" class="muted"></span></label>
+        <input id="set-mic-vol" type="range" min="0" max="200" step="1">
+      </div>
+      <div class="field">
+        <label for="set-master">Soundboard volume (what friends hear) <span id="set-master-val" class="muted"></span></label>
+        <input id="set-master" type="range" min="0" max="150" step="1">
+      </div>
+
+      <h3>Your headphones</h3>
+      <div class="field">
+        <label for="set-monitor">Hear sounds on</label>
+        <select id="set-monitor"></select>
+      </div>
+      <div class="field">
+        <label for="set-monitor-vol">Headphone volume <span id="set-monitor-vol-val" class="muted"></span></label>
+        <input id="set-monitor-vol" type="range" min="0" max="150" step="1">
+      </div>
+
+      <h3>AI voices</h3>
+      <p class="note"><b>Free AI voices</b> (Kokoro) run on this computer at no cost, with no account. They download once (about 90 MB) and then work offline. Optionally, paste an API key from OpenAI or ElevenLabs for their voices (paid by usage on your account). Keys are stored encrypted on this computer and only sent to that service.</p>
+      <div class="field">
+        <label for="key-openai">OpenAI API key <span id="key-openai-status" class="key-status"></span></label>
+        <div class="row nowrap">
+          <input id="key-openai" type="password" autocomplete="off" spellcheck="false" placeholder="sk-...">
+          <button class="btn" data-savekey="openai">Save</button>
+          <button class="btn ghost hidden" data-removekey="openai">Remove</button>
+        </div>
+        <p class="note">Get one at <a href="#" data-link="https://platform.openai.com/api-keys">platform.openai.com/api-keys</a></p>
+      </div>
+      <div class="field">
+        <label for="key-elevenlabs">ElevenLabs API key <span id="key-elevenlabs-status" class="key-status"></span></label>
+        <div class="row nowrap">
+          <input id="key-elevenlabs" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key">
+          <button class="btn" data-savekey="elevenlabs">Save</button>
+          <button class="btn ghost hidden" data-removekey="elevenlabs">Remove</button>
+        </div>
+        <p class="note">Get one at <a href="#" data-link="https://elevenlabs.io/app/settings/api-keys">elevenlabs.io &rsaquo; Settings &rsaquo; API keys</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help -->
+  <div id="help" class="overlay hidden">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Getting sounds into voice chat</h2>
+        <button class="btn icon close" data-close="help">&times;</button>
+      </div>
+      <p>Discord and games only listen to a microphone. Echo Chamber mixes your real mic with your sounds and sends both into a <b>virtual cable</b>, a free driver that acts like a fake mic.</p>
+
+      <h3>1. Install a virtual cable (one time)</h3>
+      <ul>
+        <li><b>Windows:</b> VB-Audio Virtual Cable. Install it, then restart your PC. <a href="#" data-link="https://vb-audio.com/Cable/">vb-audio.com/Cable</a></li>
+        <li><b>Mac:</b> BlackHole 2ch. <a href="#" data-link="https://existential.audio/blackhole/">existential.audio/blackhole</a></li>
+      </ul>
+
+      <h3>2. Point Echo Chamber at it</h3>
+      <p>In <b>Settings</b>, set <b>Send to</b> to <i>CABLE Input</i> (Windows) or <i>BlackHole 2ch</i> (Mac), and pick your real mic under <b>Your microphone</b>.</p>
+
+      <h3>3. Point Discord / the game at the cable</h3>
+      <p>Set the voice <b>Input Device</b> to <i>CABLE Output</i> (Windows) or <i>BlackHole 2ch</i> (Mac). Keep Echo Chamber open while you play.</p>
+      <p class="note">Tip: in Discord, turn off Krisp / noise suppression and set input sensitivity low (or use push-to-talk). Noise suppression treats music and sound effects as noise and can mute them.</p>
+
+      <h3>Text to speech</h3>
+      <p>Type in the box under the pads and press <b>Enter</b> (Shift+Enter for a new line). The voice plays into voice chat just like a pad. <b>Free AI voices</b> are the default: natural-sounding voices that run on your computer at no cost (a one-time ~90 MB download). <b>Save to pad</b> keeps the line as a sound on the selected pad, and recent lines appear as chips you can click to replay.</p>
+
+      <h3>Launchpad</h3>
+      <p>Newer Launchpads (X, Mini MK3, Pro MK3) are switched into Programmer mode automatically, so the 8&times;8 grid lines up and the pads light up in your colors. Any other MIDI controller works too: select a pad, press <b>Learn button</b>, then hit the button you want.</p>
+      <p class="note">Panic button: <b>Esc</b> stops everything, and <b>Ctrl+Shift+K</b> (<b>Cmd+Shift+K</b> on Mac) works even while a game is focused.</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
