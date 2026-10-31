@@ -25,6 +25,41 @@ const KOKORO_VOICES = [
 ];
 const KOKORO_KIND = { af: 'US female', am: 'US male', bf: 'UK female', bm: 'UK male' };
 
+// Files the free voices need. The installer ships these, so nothing is downloaded at runtime.
+const KOKORO_FILES = ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'onnx/model_quantized.onnx',
+  ...KOKORO_VOICES.map((v) => `voices/${v}.bin`)];
+
+/* Answer Hugging Face downloads from a folder of files bundled with the app.
+   The voice library asks for https://huggingface.co/<org>/<repo>/resolve/<rev>/<file>;
+   if we ship that file, we hand it back from disk instead of going online. */
+function installLocalHub(bundleDir) {
+  if (!bundleDir || !fs.existsSync(bundleDir)) return false;
+  if (globalThis.__echoLocalHub === bundleDir) return true;
+  const realFetch = globalThis.__echoRealFetch || globalThis.fetch;
+  globalThis.__echoRealFetch = realFetch;
+  globalThis.__echoLocalHub = bundleDir;
+  const root = path.resolve(bundleDir);
+  const kokoroDir = path.join(root, ...KOKORO_MODEL.split('/'));
+  globalThis.fetch = async (input, init) => {
+    const url = typeof input === 'string' ? input : (input && (input.href || input.url)) || '';
+    const m = String(url).match(/^https:\/\/huggingface\.co\/([^/]+)\/([^/]+)\/resolve\/[^/]+\/([^?#]+)/);
+    if (m) {
+      const rel = decodeURIComponent(m[3]);
+      const repoDir = path.join(root, m[1], m[2]);
+      let file = path.resolve(repoDir, rel);
+      if (!fs.existsSync(repoDir) && rel.startsWith('voices/')) file = path.resolve(kokoroDir, rel);
+      const inside = file.startsWith(root + path.sep);
+      if (inside && fs.existsSync(file) && fs.statSync(file).isFile()) {
+        const data = await fs.promises.readFile(file);
+        return new Response(data, { status: 200, headers: { 'content-type': 'application/octet-stream', 'content-length': String(data.length) } });
+      }
+      if (inside && fs.existsSync(repoDir)) return new Response('Not found', { status: 404 }); // bundled repo, optional file
+    }
+    return realFetch(input, init);
+  };
+  return true;
+}
+
 // Split long text into sentence-sized pieces the model handles well.
 function splitText(text, max = 300) {
   const pieces = [];
@@ -113,7 +148,7 @@ async function apiError(res) {
 
 function createTts({
   dir, platform = process.platform, getKey, fetchImpl = globalThis.fetch,
-  modelsDir = null, onProgress = () => {},
+  modelsDir = null, bundledModelsDir = null, onProgress = () => {},
   importKokoro = () => import('kokoro-js'),
   importTransformers = () => import('@huggingface/transformers'),
 }) {
@@ -122,13 +157,16 @@ function createTts({
   function loadKokoro() {
     if (kokoro) return kokoro;
     kokoro = (async () => {
-      // Keep downloaded models in the app's data folder (the app bundle itself is read-only).
-      if (modelsDir) {
-        try {
-          const tf = await importTransformers();
-          if (tf && tf.env) tf.env.cacheDir = modelsDir;
-        } catch { /* fall back to the library default */ }
-      }
+      // Voices shipped with the installer are read straight from disk; otherwise they download
+      // once into the app's data folder (the app bundle itself is read-only).
+      const bundled = installLocalHub(bundledModelsDir);
+      try {
+        const tf = await importTransformers();
+        if (tf && tf.env) {
+          if (modelsDir) tf.env.cacheDir = modelsDir;
+          if (bundled) tf.env.useFSCache = false; // no need to copy 100 MB we already ship
+        }
+      } catch { /* fall back to the library defaults */ }
       const { KokoroTTS } = await importKokoro();
       const files = {};
       let lastSent = -1;
@@ -141,7 +179,7 @@ function createTts({
           let loaded = 0, total = 0;
           for (const f of Object.values(files)) { loaded += f.loaded; total += f.total; }
           const pct = Math.min(99, Math.floor((loaded / total) * 100));
-          if (pct > lastSent) { lastSent = pct; onProgress(pct); }
+          if (pct > lastSent && !bundled) { lastSent = pct; onProgress(pct); }
         },
       });
       onProgress(null);
@@ -305,4 +343,7 @@ function createTts({
   return { voices, speak, clearCache };
 }
 
-module.exports = { createTts, parseMacVoices, parseWinVoices, splitText, encodeWav, MAX_CHARS };
+module.exports = {
+  createTts, parseMacVoices, parseWinVoices, splitText, encodeWav, installLocalHub,
+  MAX_CHARS, KOKORO_MODEL, KOKORO_VOICES, KOKORO_FILES,
+};

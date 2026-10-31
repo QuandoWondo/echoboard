@@ -1,7 +1,7 @@
 {
   "name": "echo-chamber",
   "productName": "Echo Chamber",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Launchpad soundboard that plays sounds through your mic into Discord and game voice chat.",
   "main": "main.js",
   "author": "Echo Chamber",
@@ -9,8 +9,9 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dist:win": "electron-builder --win",
-    "dist:mac": "electron-builder --mac"
+    "fetch-bundled": "node scripts/fetch-bundled.js",
+    "dist:win": "node scripts/fetch-bundled.js win32 && electron-builder --win --publish never",
+    "dist:mac": "node scripts/fetch-bundled.js darwin && electron-builder --mac --publish never"
   },
   "build": {
     "appId": "com.echochamber.app",
@@ -35,7 +36,17 @@
           ]
         }
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "extraResources": [
+        {
+          "from": "bundled/voice-models",
+          "to": "voice-models"
+        },
+        {
+          "from": "bundled/vbcable/win",
+          "to": "vbcable"
+        }
+      ]
     },
     "nsis": {
       "oneClick": true,
@@ -57,7 +68,17 @@
         "NSMicrophoneUsageDescription": "Echo Chamber passes your microphone through to voice chat along with your sounds."
       },
       "icon": "build/icon.png",
-      "artifactName": "Echo-Chamber-${version}-${arch}.${ext}"
+      "artifactName": "Echo-Chamber-${version}-${arch}.${ext}",
+      "extraResources": [
+        {
+          "from": "bundled/voice-models",
+          "to": "voice-models"
+        },
+        {
+          "from": "bundled/vbcable/mac",
+          "to": "vbcable"
+        }
+      ]
     },
     "asarUnpack": [
       "node_modules/onnxruntime-node/**",

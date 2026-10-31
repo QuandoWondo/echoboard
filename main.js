@@ -12,6 +12,8 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const AUDIO_EXT = ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'webm'];
 const configPath = () => path.join(app.getPath('userData'), 'echo-chamber.json');
 const soundsDir = () => path.join(app.getPath('userData'), 'sounds');
+// Voices and VB-CABLE shipped inside the installer (see scripts/fetch-bundled.js).
+const bundledDir = () => (app.isPackaged ? process.resourcesPath : path.join(__dirname, 'bundled'));
 const keysPath = () => path.join(app.getPath('userData'), 'echo-chamber-keys.json');
 const TTS_PROVIDERS = ['openai', 'elevenlabs'];
 
@@ -116,7 +118,10 @@ ipcMain.handle('tts:set-key', async (_e, provider, key) => setKey(provider, key)
 let cableJob = null;
 ipcMain.handle('cable:install', async () => {
   if (!cableJob) {
-    const installer = createCableInstaller({ onStatus: (t) => { if (win) win.webContents.send('cable:status', t); } });
+    const installer = createCableInstaller({
+      bundledDir: path.join(bundledDir(), 'vbcable'),
+      onStatus: (t) => { if (win) win.webContents.send('cable:status', t); },
+    });
     cableJob = installer.install().finally(() => { cableJob = null; });
   }
   return cableJob;
@@ -138,6 +143,7 @@ app.whenReady().then(async () => {
   tts = createTts({
     dir: path.join(app.getPath('userData'), 'tts-cache'),
     modelsDir: path.join(app.getPath('userData'), 'voice-models'),
+    bundledModelsDir: path.join(bundledDir(), 'voice-models'),
     getKey,
     onProgress: (pct) => { if (win) win.webContents.send('tts:progress', pct); },
   });

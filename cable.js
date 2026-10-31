@@ -41,8 +41,22 @@ async function walk(dir) {
 
 function createCableInstaller({
   platform = process.platform, arch = process.arch, fetchImpl = globalThis.fetch,
-  run = defaultRun, tmpRoot = os.tmpdir(), onStatus = () => {},
+  run = defaultRun, tmpRoot = os.tmpdir(), onStatus = () => {}, bundledDir = null,
 } = {}) {
+  // Driver pack shipped inside the installer (newest one if several).
+  async function findBundledZip() {
+    if (!bundledDir) return null;
+    const re = platform === 'win32' ? /^VBCABLE_Driver_Pack(\d+)\.zip$/i : /^VBCable_MACDriver_Pack(\d+)\.zip$/i;
+    let best = null;
+    try {
+      for (const f of await fs.promises.readdir(bundledDir)) {
+        const m = f.match(re);
+        if (m && (!best || Number(m[1]) > best.n)) best = { n: Number(m[1]), file: path.join(bundledDir, f) };
+      }
+    } catch { /* not bundled */ }
+    return best && best.file;
+  }
+
   const ps = (script, env, opts = {}) => run('powershell.exe',
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
     { ...opts, env: { ...process.env, ...env } });
@@ -127,9 +141,14 @@ function createCableInstaller({
     if (platform !== 'win32' && platform !== 'darwin') throw new Error('Automatic setup works on Windows and Mac.');
     const work = await fs.promises.mkdtemp(path.join(tmpRoot, 'echo-cable-'));
     try {
-      onStatus('Downloading VB-CABLE from vb-audio.com…');
       const zip = path.join(work, 'cable.zip');
-      await download(await findDownloadUrl(), zip);
+      const bundled = await findBundledZip();
+      if (bundled) {
+        await fs.promises.copyFile(bundled, zip);
+      } else {
+        onStatus('Downloading VB-CABLE from vb-audio.com…');
+        await download(await findDownloadUrl(), zip);
+      }
       onStatus('Unpacking…');
       const out = path.join(work, 'files');
       await fs.promises.mkdir(out);
@@ -145,7 +164,7 @@ function createCableInstaller({
     }
   }
 
-  return { install, findDownloadUrl };
+  return { install, findDownloadUrl, findBundledZip, download };
 }
 
 module.exports = { createCableInstaller, walk };
