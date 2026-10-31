@@ -3,6 +3,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -12,10 +16,26 @@ jobs:
         with: { node-version: 20 }
       - run: npm install
       - run: npm run dist:win
+      - name: Verify bundle
+        shell: pwsh
+        run: |
+          $res = "dist/win-unpacked/resources"
+          $model = "$res/voice-models/onnx-community/Kokoro-82M-v1.0-ONNX"
+          $checks = [ordered]@{
+            "app"            = Test-Path "$res/app.asar"
+            "voice model"    = (Test-Path "$model/onnx/model_quantized.onnx") -and ((Get-Item "$model/onnx/model_quantized.onnx").Length -gt 50MB)
+            "28 voices"      = (Get-ChildItem "$model/voices" -Filter *.bin).Count -eq 28
+            "VB-CABLE"       = (Get-ChildItem "$res/vbcable" -Filter "VBCABLE_Driver_Pack*.zip").Count -ge 1
+            "voice engine"   = Test-Path "$res/app.asar.unpacked/node_modules/onnxruntime-node"
+            "installer"      = (Get-ChildItem dist -Filter "Echo-Board-Setup-*.exe").Count -eq 1
+          }
+          $checks.GetEnumerator() | ForEach-Object { "{0,-14} {1}" -f $_.Key, $(if ($_.Value) { "OK" } else { "MISSING" }) }
+          if ($checks.Values -contains $false) { throw "Bundle check failed" }
       - uses: actions/upload-artifact@v4
         with:
           name: Echo-Board-Windows
           path: dist/*.exe
+
   mac:
     runs-on: macos-latest
     steps:
@@ -24,7 +44,50 @@ jobs:
         with: { node-version: 20 }
       - run: npm install
       - run: npm run dist:mac
+      - name: Verify bundle
+        run: |
+          res="$(ls -d dist/mac*/Echo\ Board.app)/Contents/Resources"
+          model="$res/voice-models/onnx-community/Kokoro-82M-v1.0-ONNX"
+          fail=0
+          check() { if eval "$2"; then printf '%-14s OK\n' "$1"; else printf '%-14s MISSING\n' "$1"; fail=1; fi; }
+          check "app"          "[ -f \"$res/app.asar\" ]"
+          check "voice model"  "[ \$(stat -f%z \"$model/onnx/model_quantized.onnx\") -gt 50000000 ]"
+          check "28 voices"    "[ \$(ls \"$model/voices\"/*.bin | wc -l) -eq 28 ]"
+          check "VB-CABLE"     "ls \"$res/vbcable\"/VBCable_MACDriver_Pack*.zip >/dev/null 2>&1"
+          check "voice engine" "[ -d \"$res/app.asar.unpacked/node_modules/onnxruntime-node\" ]"
+          check "installer"    "ls dist/Echo-Board-*.dmg >/dev/null 2>&1"
+          exit $fail
       - uses: actions/upload-artifact@v4
         with:
           name: Echo-Board-Mac
           path: dist/*.dmg
+
+  release:
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - name: Publish download page
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          cat > notes.md <<'EOF'
+          ## Download
+          - **Windows:** `Echo-Board-Setup-*.exe`, double-click to install. Adds an Echo Board icon to your desktop and Start menu.
+          - **Mac:** `Echo-Board-*.dmg`, open it and drag Echo Board into Applications.
+
+          Everything is included: the free AI voices and the VB-CABLE virtual microphone. Nothing else to download.
+
+          **First launch:** Windows may say "Windows protected your PC". Click **More info → Run anyway**. On Mac, right-click the app → **Open** → **Open**.
+
+          VB-CABLE is made by VB-Audio (https://vb-cable.com). VB-CABLE is a donationware, all participations are welcome.
+          EOF
+          sed -i 's/^          //' notes.md
+          if gh release view "$version" >/dev/null 2>&1; then
+            gh release upload "$version" out/* --clobber
+          else
+            gh release create "$version" out/* --title "Echo Board $version" --notes-file notes.md --latest
+          fi
