@@ -1,0 +1,27 @@
+name: Diagnose
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install
+      - run: node scripts/fetch-bundled.js win32
+      - run: npx electron-builder --win --dir --publish never
+      - run: npm install --no-save playwright@1.48.2
+      - run: node ci/diagnose.js "dist/win-unpacked/Echo Board.exe" diag
+        timeout-minutes: 15
+      - name: Save results to the diag-results branch
+        shell: bash
+        run: |
+          git config user.name "Echo Board CI"; git config user.email "noreply@github.com"
+          mkdir -p /tmp/d && cp -r diag/* /tmp/d/
+          git checkout --orphan diag-results
+          git rm -rf . > /dev/null
+          cp -r /tmp/d/* .
+          git add -A && git commit -m "Diagnostics ${{ github.run_id }}" && git push -f origin diag-results
