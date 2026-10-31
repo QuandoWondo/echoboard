@@ -51,6 +51,7 @@ function createWindow() {
     minHeight: 700,
     backgroundColor: '#000000',
     title: 'Echo Board',
+    icon: path.join(__dirname, 'src', 'assets', 'icon-256.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
