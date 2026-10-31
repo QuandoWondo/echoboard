@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { createTts } = require('./tts');
+const { createCableInstaller } = require('./cable');
 
 // MIDI presses aren't "user gestures", so let audio start without one.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -111,6 +112,15 @@ ipcMain.handle('tts:key-status', async () => {
   return out;
 });
 ipcMain.handle('tts:set-key', async (_e, provider, key) => setKey(provider, key));
+
+let cableJob = null;
+ipcMain.handle('cable:install', async () => {
+  if (!cableJob) {
+    const installer = createCableInstaller({ onStatus: (t) => { if (win) win.webContents.send('cable:status', t); } });
+    cableJob = installer.install().finally(() => { cableJob = null; });
+  }
+  return cableJob;
+});
 
 ipcMain.handle('open-external', async (_e, url) => {
   if (typeof url === 'string' && url.startsWith('https://')) await shell.openExternal(url);

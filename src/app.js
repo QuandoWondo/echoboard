@@ -21,8 +21,8 @@ const COLORS = [
 ];
 const colorById = (id) => COLORS.find((c) => c.id === id) || COLORS[5];
 
-const CABLE_OUT_RE = /cable input|blackhole|vb-audio|voicemeeter input/i; // devices we send INTO
-const CABLE_MIC_RE = /cable output|blackhole|voicemeeter out/i;            // the cable's mic side (never use as your mic)
+const CABLE_OUT_RE = /cable input|blackhole|vb-audio|vb-cable|voicemeeter input/i; // devices we send INTO
+const CABLE_MIC_RE = /cable output|blackhole|vb-cable|voicemeeter out/i;            // the cable's mic side (never use as your mic)
 const LAUNCHPAD_RE = /launchpad|lpmini|lpx|lppro/i;
 
 const DEFAULT_SETTINGS = {
@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
   micVolume: 1,
   masterVolume: 1,
   monitorVolume: 0.8,
+  cableSetupShown: false,
   tts: { provider: 'kokoro', voice: { kokoro: 'af_heart', system: '', openai: 'alloy', elevenlabs: '' }, style: '', v: 2 },
 };
 const TTS_NAMES = { kokoro: 'Free AI', system: 'Built-in', openai: 'OpenAI', elevenlabs: 'ElevenLabs' };
@@ -873,6 +874,61 @@ function wireTts() {
   }));
 }
 
+/* ---------------- Virtual cable setup ---------------- */
+
+const cable = { busy: false };
+
+function setCableStatus(text, cls) {
+  const el = $('#cable-status');
+  el.textContent = text || '';
+  el.className = 'cable-status' + (cls ? ' ' + cls : '');
+}
+
+function openCableSetup() {
+  const isWin = echo.platform === 'win32';
+  $('#cable-steps-win').classList.toggle('hidden', !isWin);
+  $('#cable-steps-mac').classList.toggle('hidden', isWin);
+  document.querySelectorAll('.cable-mic-name').forEach((e) => { e.textContent = isWin ? 'CABLE Output (VB-Audio Virtual Cable)' : 'VB-Cable'; });
+  if (!cable.busy) setCableStatus(engine.routeOk ? 'A virtual cable is already set up.' : '', engine.routeOk ? 'ok' : '');
+  $('#settings').classList.add('hidden');
+  $('#cable').classList.remove('hidden');
+}
+
+async function installCable() {
+  if (cable.busy) return;
+  cable.busy = true;
+  $('#cable-install').disabled = true;
+  setCableStatus('Starting…');
+  try {
+    const r = await echo.installCable();
+    if (r && r.cancelled) {
+      setCableStatus('Cancelled. Click Install to try again.');
+    } else {
+      state.settings.cableDevice = null; // let Echo Chamber pick the new cable automatically
+      save();
+      await refreshAudioDevices();
+      restartAudio();
+      if (r && r.restart) {
+        setCableStatus('Installed! Restart your PC to finish. Echo Chamber will use it automatically.', 'ok');
+      } else {
+        setCableStatus('Installed! Echo Chamber now sends to VB-Cable.', 'ok');
+      }
+      toast('Virtual cable installed.');
+    }
+  } catch (e) {
+    setCableStatus(errMsg(e) + ' You can also install it from vb-cable.com.', 'bad');
+  } finally {
+    cable.busy = false;
+    $('#cable-install').disabled = false;
+  }
+}
+
+function wireCable() {
+  $('#cable-install').addEventListener('click', installCable);
+  $('#set-cable-install').addEventListener('click', openCableSetup);
+  if (echo.onCableStatus) echo.onCableStatus((t) => { if (cable.busy) setCableStatus(t); });
+}
+
 function openSettings() {
   refreshAudioDevices();
   refreshMidiLists();
@@ -930,9 +986,9 @@ function wireSettings() {
   };
   $('#btn-settings').addEventListener('click', openSettings);
   $('#btn-help').addEventListener('click', () => open('help'));
-  $('#chip-out').addEventListener('click', () => open(engine.routeOk ? 'settings' : 'help'));
-  $('#chip-mic').addEventListener('click', () => open('settings'));
-  $('#chip-midi').addEventListener('click', () => open('settings'));
+  $('#chip-out').addEventListener('click', () => (engine.routeOk ? openSettings() : openCableSetup()));
+  $('#chip-mic').addEventListener('click', openSettings);
+  $('#chip-midi').addEventListener('click', openSettings);
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => close(b.dataset.close)));
   document.querySelectorAll('.overlay').forEach((o) => o.addEventListener('mousedown', (e) => { if (e.target === o) close(o.id); }));
   document.querySelectorAll('[data-link]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); echo.openExternal(a.dataset.link); }));
@@ -1002,6 +1058,7 @@ async function boot() {
   wireSettings();
   wireKeys();
   wireTts();
+  wireCable();
   renderEditor();
   renderTts();
   renderLevels();
@@ -1011,6 +1068,12 @@ async function boot() {
   await refreshAudioDevices();
   await engine.start(state.settings);
   updateChips();
+  // First run with no virtual cable: offer to set one up (once).
+  if (!engine.routeOk && !state.settings.cableSetupShown && (echo.platform === 'win32' || echo.platform === 'darwin')) {
+    state.settings.cableSetupShown = true;
+    save();
+    openCableSetup();
+  }
   navigator.mediaDevices.addEventListener('devicechange', async () => {
     const before = engine.routeOk;
     await refreshAudioDevices();

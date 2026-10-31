@@ -19,6 +19,7 @@
       "main.js",
       "preload.js",
       "tts.js",
+      "cable.js",
       "src/**/*"
     ],
     "directories": {

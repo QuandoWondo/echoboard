@@ -134,7 +134,10 @@
       <h3>Voice chat</h3>
       <div class="field">
         <label for="set-cable">Send to (virtual cable)</label>
-        <select id="set-cable"></select>
+        <div class="row nowrap">
+          <select id="set-cable"></select>
+          <button id="set-cable-install" class="btn">Install&hellip;</button>
+        </div>
         <p class="note">Windows: <b>CABLE Input</b>. Mac: <b>BlackHole 2ch</b>. Then pick the matching cable as your mic in Discord or the game.</p>
       </div>
       <div class="field">
@@ -187,6 +190,39 @@
     </div>
   </div>
 
+  <!-- Voice chat setup -->
+  <div id="cable" class="overlay hidden">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Set up voice chat</h2>
+        <button class="btn icon close" data-close="cable">&times;</button>
+      </div>
+      <p>Discord and games only listen to a microphone. Echo Chamber sends your voice and your sounds into a <b>virtual microphone</b>, and you pick that microphone in Discord.</p>
+      <p>Echo Chamber can install one for you: <b>VB-CABLE</b>, a free virtual audio cable by VB-Audio.</p>
+      <ol id="cable-steps-win" class="steps">
+        <li>Click <b>Install virtual cable</b>.</li>
+        <li>Windows asks to allow changes: click <b>Yes</b>.</li>
+        <li>Windows asks to install the VB-Audio driver: click <b>Install</b>.</li>
+        <li><b>Restart your PC</b> when it's done.</li>
+      </ol>
+      <ol id="cable-steps-mac" class="steps hidden">
+        <li>Click <b>Install virtual cable</b>.</li>
+        <li>Enter your Mac password when asked.</li>
+        <li>Done. No restart needed.</li>
+      </ol>
+      <div class="row cable-action">
+        <button id="cable-install" class="btn primary">Install virtual cable</button>
+        <span id="cable-status" class="cable-status"></span>
+      </div>
+
+      <h3>Then in Discord</h3>
+      <p>User Settings &rsaquo; Voice &amp; Video &rsaquo; <b>Input Device</b>: choose <b class="cable-mic-name">CABLE Output</b>. Turn off Krisp / noise suppression. In games, pick the same device as your microphone.</p>
+
+      <p class="note">VB-CABLE is made by VB-Audio (<a href="#" data-link="https://vb-audio.com/Cable/">vb-cable.com</a>). VB-CABLE is a donationware, all participations are welcome. You can donate on their site.</p>
+      <p class="note">Already use BlackHole or VoiceMeeter? Pick it under Settings &rsaquo; Send to instead.</p>
+    </div>
+  </div>
+
   <!-- Help -->
   <div id="help" class="overlay hidden">
     <div class="panel">
@@ -197,9 +233,10 @@
       <p>Discord and games only listen to a microphone. Echo Chamber mixes your real mic with your sounds and sends both into a <b>virtual cable</b>, a free driver that acts like a fake mic.</p>
 
       <h3>1. Install a virtual cable (one time)</h3>
+      <p>Easiest: click <b>No virtual cable</b> at the top (or Settings &rsaquo; Install&hellip;) and Echo Chamber installs VB-CABLE for you. Or install one yourself:</p>
       <ul>
         <li><b>Windows:</b> VB-Audio Virtual Cable. Install it, then restart your PC. <a href="#" data-link="https://vb-audio.com/Cable/">vb-audio.com/Cable</a></li>
-        <li><b>Mac:</b> BlackHole 2ch. <a href="#" data-link="https://existential.audio/blackhole/">existential.audio/blackhole</a></li>
+        <li><b>Mac:</b> VB-CABLE (same site) or BlackHole 2ch. <a href="#" data-link="https://existential.audio/blackhole/">existential.audio/blackhole</a></li>
       </ul>
 
       <h3>2. Point Echo Chamber at it</h3>

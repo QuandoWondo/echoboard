@@ -169,6 +169,12 @@ input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
 }
 .tts-chip:hover { background: var(--hover); border-color: var(--line-strong); }
 .tts-chip.playing { border-color: var(--accent); color: var(--accent); }
+.steps { padding-left: 22px; margin: 10px 0; }
+.steps li { margin: 4px 0; }
+.cable-action { margin: 16px 0 4px; flex-wrap: nowrap; }
+.cable-status { font-size: 14px; color: var(--muted); }
+.cable-status.ok { color: var(--ok); font-weight: 700; }
+.cable-status.bad { color: var(--bad); }
 .key-status { color: var(--ok); font-weight: 700; }
 .row.nowrap { flex-wrap: nowrap; }
 .row.nowrap input { flex: 1; min-width: 0; }

@@ -12,12 +12,14 @@ Runs on **Windows** and **Mac** (same code, built on each machine).
 
 > Updating from an earlier version? Run `npm install` again. The free AI voices add a new package.
 
-**Install a virtual audio cable.** This is the "fake mic" that Discord listens to.
+**Virtual audio cable** (the "fake mic" Discord listens to): Echo Chamber installs one for you. On first launch it offers **Set up voice chat**. You can also open it any time by clicking **No virtual cable** at the top, or from Settings → Send to → **Install…**. It downloads the free **VB-CABLE** from VB-Audio and runs its installer:
 
-| | Install | Echo Chamber "Send to" | Discord / game Input Device |
-|---|---|---|---|
-| Windows | VB-Audio Virtual Cable: https://vb-audio.com/Cable/ (restart after) | **CABLE Input** | **CABLE Output** |
-| Mac | BlackHole 2ch: https://existential.audio/blackhole/ | **BlackHole 2ch** | **BlackHole 2ch** |
+- **Windows:** click **Yes** to allow changes, click **Install** on the VB-Audio driver prompt, then restart your PC.
+- **Mac:** enter your password. No restart needed.
+
+Then in Discord (and in games), set the voice **Input Device** to **CABLE Output** (Windows) or **VB-Cable** (Mac).
+
+VB-CABLE is made by VB-Audio (https://vb-cable.com). VB-CABLE is a donationware, all participations are welcome. BlackHole and VoiceMeeter also work. Pick them under Settings → Send to.
 
 ## 2. Run it
 
@@ -83,8 +85,8 @@ Older Launchpads (Mini MK2, S, MK1) and any other MIDI controller work too. Sele
 
 ### Troubleshooting
 
-- **"No virtual cable"**: the cable isn't installed, or isn't selected in Settings → Send to.
-- **"Mic is the cable!"**: your mic is set to CABLE Output / BlackHole, which loops back on itself. Pick your real mic.
+- **"No virtual cable"**: click it to install VB-CABLE, or pick your cable in Settings → Send to. On Windows, restart after installing.
+- **"Mic is the cable!"**: your mic is set to CABLE Output / VB-Cable / BlackHole, which loops back on itself. Pick your real mic.
 - **No controller**: plug in the Launchpad (it's picked up live), or pick it in Settings.
 - **Mac, no mic**: System Settings → Privacy & Security → Microphone → enable Echo Chamber.
 

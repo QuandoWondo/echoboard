@@ -15,5 +15,7 @@ contextBridge.exposeInMainWorld('echo', {
   ttsKeyStatus: () => ipcRenderer.invoke('tts:key-status'),
   ttsSetKey: (provider, key) => ipcRenderer.invoke('tts:set-key', provider, key),
   onTtsProgress: (cb) => ipcRenderer.on('tts:progress', (_e, pct) => cb(pct)),
+  installCable: () => ipcRenderer.invoke('cable:install'),
+  onCableStatus: (cb) => ipcRenderer.on('cable:status', (_e, t) => cb(t)),
   onStopAll: (cb) => ipcRenderer.on('stop-all', () => cb()),
 });
