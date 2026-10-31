@@ -202,9 +202,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .pad.missing { border-style: dashed; border-color: var(--bad); }
 .pad.drop { outline: 2px dashed var(--accent); outline-offset: 2px; background: var(--accent-soft); }
 .pad-name {
-  font-size: 12px; font-weight: 700; line-height: 1.2;
+  font-size: 11.5px; font-weight: 700; line-height: 1.2;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-  word-break: break-word;
+  overflow-wrap: anywhere; word-break: normal; hyphens: auto;
 }
 .pad-tag { font-size: 11px; color: var(--muted); }
 .pad.playing .pad-tag { color: rgba(15, 20, 25, 0.6); }
