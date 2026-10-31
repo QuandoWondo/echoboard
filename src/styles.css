@@ -206,6 +206,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   overflow-wrap: anywhere; word-break: normal; hyphens: auto;
 }
+.pad-name.long { font-size: 10px; letter-spacing: -0.01em; }
 .pad-tag { font-size: 11px; color: var(--muted); }
 .pad.playing .pad-tag { color: rgba(15, 20, 25, 0.6); }
 .pad-prog {

@@ -484,7 +484,10 @@ function renderPad(i) {
   el.classList.toggle('playing', engine.isPlaying(i));
   el.classList.toggle('selected', i === selected);
   el.classList.toggle('missing', missing.has(i));
-  el.querySelector('.pad-name').textContent = pad.file ? pad.name || 'Untitled' : '';
+  const nameText = pad.file ? pad.name || 'Untitled' : '';
+  const nameEl = el.querySelector('.pad-name');
+  nameEl.textContent = nameText;
+  nameEl.classList.toggle('long', nameText.split(/\s+/).some((w) => w.length > 7)); // smaller text so long words don't split
   el.querySelector('.pad-tag').textContent = padLabel(i) + (pad.trigger ? '' : ' · no button');
   if (!engine.isPlaying(i)) el.style.setProperty('--p', 0);
 }
