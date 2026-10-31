@@ -43,7 +43,7 @@ const NEEDS_KEY = new Set(['openai', 'elevenlabs']);
 const TTS_MAX = 1000;
 
 const $ = (s) => document.querySelector(s);
-const echo = window.echo;
+// `echo` (the bridge to the desktop side) is provided globally by preload.js; don't redeclare it.
 
 const state = { pads: [], settings: { ...DEFAULT_SETTINGS }, stopAllTrigger: null };
 let selected = 0;
@@ -1065,8 +1065,15 @@ async function boot() {
   renderSettingsLearn();
   updateChips();
 
-  await refreshAudioDevices();
-  await engine.start(state.settings);
+  // Each startup step is independent: if one stalls or fails, the rest of the app still loads.
+  const step = (name, p, ms = 10000) => Promise.race([
+    Promise.resolve(p),
+    new Promise((_, rej) => setTimeout(() => rej(new Error(name + ' timed out')), ms)),
+  ]).catch((e) => console.error('Startup step failed:', name, e));
+
+  loadTtsVoices();
+  await step('audio devices', refreshAudioDevices());
+  await step('audio engine', engine.start(state.settings));
   updateChips();
   // First run with no virtual cable: offer to set one up (once).
   if (!engine.routeOk && !state.settings.cableSetupShown && (echo.platform === 'win32' || echo.platform === 'darwin')) {
@@ -1085,10 +1092,11 @@ async function boot() {
     if (p.file) engine.load(p.file).catch(() => { missing.add(i); renderPad(i); });
   });
 
-  await initMidi();
-  await refreshKeyStatus();
-  loadTtsVoices();
   requestAnimationFrame(progressLoop);
+  await step('MIDI', initMidi(), 8000);
+  await step('API keys', refreshKeyStatus());
+  if (NEEDS_KEY.has(ttsCfg().provider)) loadTtsVoices(); // now that we know which keys are saved
+  updateChips();
 }
 
 boot().catch((e) => { console.error(e); toast('Startup error: ' + (e.message || e)); });

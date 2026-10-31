@@ -61,6 +61,13 @@ function createWindow() {
     },
   });
   win.setMenuBarVisibility(false);
+  // Keep a log of interface errors so problems on a user's machine can be diagnosed.
+  const logFile = path.join(app.getPath('userData'), 'echo-board.log');
+  const log = (line) => fs.promises.appendFile(logFile, new Date().toISOString() + ' ' + line + '\n').catch(() => {});
+  win.webContents.on('console-message', (_e, level, message, lineNo, source) => {
+    if (level >= 2) log(`[renderer] ${message} (${path.basename(String(source || ''))}:${lineNo})`);
+  });
+  win.webContents.on('render-process-gone', (_e, d) => log('[renderer crashed] ' + JSON.stringify(d)));
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
   win.on('closed', () => { win = null; });
 }
