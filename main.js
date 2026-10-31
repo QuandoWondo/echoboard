@@ -10,11 +10,11 @@ const { createCableInstaller } = require('./cable');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 const AUDIO_EXT = ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'webm'];
-const configPath = () => path.join(app.getPath('userData'), 'echo-chamber.json');
+const configPath = () => path.join(app.getPath('userData'), 'echo-board.json');
 const soundsDir = () => path.join(app.getPath('userData'), 'sounds');
 // Voices and VB-CABLE shipped inside the installer (see scripts/fetch-bundled.js).
 const bundledDir = () => (app.isPackaged ? process.resourcesPath : path.join(__dirname, 'bundled'));
-const keysPath = () => path.join(app.getPath('userData'), 'echo-chamber-keys.json');
+const keysPath = () => path.join(app.getPath('userData'), 'echo-board-keys.json');
 const TTS_PROVIDERS = ['openai', 'elevenlabs'];
 
 /* ---- API keys: encrypted with the OS keychain when available, never sent to the window ---- */
@@ -50,7 +50,7 @@ function createWindow() {
     minWidth: 940,
     minHeight: 700,
     backgroundColor: '#000000',
-    title: 'Echo Chamber',
+    title: 'Echo Board',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

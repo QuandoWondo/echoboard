@@ -1,5 +1,5 @@
 'use strict';
-/* Text-to-speech for Echo Chamber (runs in the main process).
+/* Text-to-speech for Echo Board (runs in the main process).
    Every provider renders to an audio file; the renderer then plays that file
    through the same engine as the pads, so it reaches the virtual cable.
    - kokoro:     Kokoro-82M neural voices running locally (free, no account;

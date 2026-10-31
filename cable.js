@@ -125,7 +125,7 @@ function createCableInstaller({
         await run('osascript', ['-e',
           'do shell script "/usr/sbin/installer -pkg " & quoted form of (system attribute "EC_PKG") & ' +
           '" -target / && (/usr/bin/killall coreaudiod || true)" with administrator privileges ' +
-          'with prompt "Echo Chamber wants to install the VB-CABLE virtual microphone."'],
+          'with prompt "Echo Board wants to install the VB-CABLE virtual microphone."'],
         { env: { ...process.env, EC_PKG: pkg }, timeout: 15 * 60 * 1000 });
       } catch (e) {
         if (/-128|cancel/i.test(e.message)) return { cancelled: true };

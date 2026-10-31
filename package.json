@@ -1,10 +1,10 @@
 {
-  "name": "echo-chamber",
-  "productName": "Echo Chamber",
+  "name": "echo-board",
+  "productName": "Echo Board",
   "version": "0.3.0",
   "description": "Launchpad soundboard that plays sounds through your mic into Discord and game voice chat.",
   "main": "main.js",
-  "author": "Echo Chamber",
+  "author": "Echo Board",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
@@ -14,8 +14,8 @@
     "dist:mac": "node scripts/fetch-bundled.js darwin && electron-builder --mac --publish never"
   },
   "build": {
-    "appId": "com.echochamber.app",
-    "productName": "Echo Chamber",
+    "appId": "com.echoboard.app",
+    "productName": "Echo Board",
     "files": [
       "main.js",
       "preload.js",
@@ -53,10 +53,10 @@
       "perMachine": false,
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "Echo Chamber",
+      "shortcutName": "Echo Board",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "Echo-Chamber-Setup-${version}.${ext}"
+      "artifactName": "Echo-Board-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [
@@ -65,10 +65,10 @@
       "category": "public.app-category.music",
       "identity": null,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Echo Chamber passes your microphone through to voice chat along with your sounds."
+        "NSMicrophoneUsageDescription": "Echo Board passes your microphone through to voice chat along with your sounds."
       },
       "icon": "build/icon.png",
-      "artifactName": "Echo-Chamber-${version}-${arch}.${ext}",
+      "artifactName": "Echo-Board-${version}-${arch}.${ext}",
       "extraResources": [
         {
           "from": "bundled/voice-models",

@@ -1,5 +1,5 @@
 @echo off
-title Building Echo Chamber
+title Building Echo Board
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (
@@ -16,7 +16,7 @@ echo Building the Windows installer (includes voices + VB-CABLE, about 110 MB to
 call npm run dist:win
 if errorlevel 1 goto fail
 echo.
-echo Done! Opening the folder with Echo-Chamber-Setup.exe ...
+echo Done! Opening the folder with Echo-Board-Setup.exe ...
 start "" "%~dp0dist"
 pause
 exit /b 0

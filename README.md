@@ -1,4 +1,4 @@
-# Echo Chamber
+# Echo Board
 
 A Launchpad soundboard for Discord and game voice chat. Press a pad, and the sound plays through your mic so everyone in chat hears it. You hear it in your headphones too.
 
@@ -8,11 +8,11 @@ Runs on **Windows** and **Mac** (same code, built on each machine).
 
 ## 1. One-time setup
 
-**Easiest:** use the installer (`Echo-Chamber-Setup-x.y.z.exe` on Windows, `.dmg` on Mac). It includes everything: the app, the free AI voices and the VB-CABLE virtual microphone. Nothing else to download.
+**Easiest:** use the installer (`Echo-Board-Setup-x.y.z.exe` on Windows, `.dmg` on Mac). It includes everything: the app, the free AI voices and the VB-CABLE virtual microphone. Nothing else to download.
 
 **Running from source instead:** install Node.js (LTS) from https://nodejs.org, then follow step 2. When updating from an earlier version, run `npm install` again.
 
-**Virtual audio cable** (the "fake mic" Discord listens to): Echo Chamber installs one for you. On first launch it offers **Set up voice chat**. You can also open it any time by clicking **No virtual cable** at the top, or from Settings → Send to → **Install…**. It installs the free **VB-CABLE** by VB-Audio (included in the installer):
+**Virtual audio cable** (the "fake mic" Discord listens to): Echo Board installs one for you. On first launch it offers **Set up voice chat**. You can also open it any time by clicking **No virtual cable** at the top, or from Settings → Send to → **Install…**. It installs the free **VB-CABLE** by VB-Audio (included in the installer):
 
 - **Windows:** click **Yes** to allow changes, click **Install** on the VB-Audio driver prompt, then restart your PC.
 - **Mac:** enter your password. No restart needed.
@@ -32,11 +32,11 @@ npm start
 
 ## 3. Build the installers
 
-- **Windows:** `npm run dist:win` (or double-click `build-windows.bat`) → `dist/Echo-Chamber-Setup-x.y.z.exe`
-- **Mac:** `npm run dist:mac` → `dist/Echo-Chamber-x.y.z-arm64.dmg`
+- **Windows:** `npm run dist:win` (or double-click `build-windows.bat`) → `dist/Echo-Board-Setup-x.y.z.exe`
+- **Mac:** `npm run dist:mac` → `dist/Echo-Board-x.y.z-arm64.dmg`
 - **Both, in the cloud:** push to GitHub and the included workflow builds both on GitHub's free machines (Actions tab → latest run → Artifacts).
 
-The build step downloads the voices and VB-CABLE once (about 110 MB) and packs them into the installer, so users never download anything. The installer adds an **Echo Chamber** icon to the desktop and Start menu and opens the app.
+The build step downloads the voices and VB-CABLE once (about 110 MB) and packs them into the installer, so users never download anything. The installer adds an **Echo Board** icon to the desktop and Start menu and opens the app.
 
 Unsigned builds: on Windows, SmartScreen says "Windows protected your PC" → **More info → Run anyway** (once). On Mac, **right-click the app → Open → Open** the first time.
 
@@ -64,7 +64,7 @@ Unsigned builds: on Windows, SmartScreen says "Windows protected your PC" → **
 Type in the box under the pads and press **Enter** (Shift+Enter for a new line). The voice plays into voice chat just like a pad.
 
 - **Free AI voices** (default): 28 natural US and UK voices from Kokoro, an open-source AI voice model that runs on your own computer. No account, no API key, no cost. Built into the installer and works offline. (When running from source, it downloads about 90 MB the first time.)
-- **Built-in voices**: free and offline (macOS voices on Mac, Windows voices on PC). Tip: on Mac, add better free voices in System Settings → Accessibility → Spoken Content → System Voice → Manage Voices (pick an "Enhanced" or "Premium" voice), then restart Echo Chamber.
+- **Built-in voices**: free and offline (macOS voices on Mac, Windows voices on PC). Tip: on Mac, add better free voices in System Settings → Accessibility → Spoken Content → System Voice → Manage Voices (pick an "Enhanced" or "Premium" voice), then restart Echo Board.
 - **OpenAI voices** (optional, paid): AI voices, plus a **Voice style** line (e.g. "hyped sports announcer"). Needs an OpenAI API key.
 - **ElevenLabs voices** (optional, paid): AI voices, including any you've cloned. Needs an ElevenLabs API key.
 
@@ -89,6 +89,6 @@ Older Launchpads (Mini MK2, S, MK1) and any other MIDI controller work too. Sele
 - **"No virtual cable"**: click it to install VB-CABLE, or pick your cable in Settings → Send to. On Windows, restart after installing.
 - **"Mic is the cable!"**: your mic is set to CABLE Output / VB-Cable / BlackHole, which loops back on itself. Pick your real mic.
 - **No controller**: plug in the Launchpad (it's picked up live), or pick it in Settings.
-- **Mac, no mic**: System Settings → Privacy & Security → Microphone → enable Echo Chamber.
+- **Mac, no mic**: System Settings → Privacy & Security → Microphone → enable Echo Board.
 
 Settings and pad layouts are saved automatically.

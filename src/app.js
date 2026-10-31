@@ -1,7 +1,7 @@
 'use strict';
 
 /* ============================================================
-   Echo Chamber — renderer
+   Echo Board — renderer
    - Engine: mixes mic + clips into the virtual cable, and clips
      into your headphones (two AudioContexts, one per device).
    - MIDI: Launchpad presses trigger pads; pad colors are sent
@@ -904,14 +904,14 @@ async function installCable() {
     if (r && r.cancelled) {
       setCableStatus('Cancelled. Click Install to try again.');
     } else {
-      state.settings.cableDevice = null; // let Echo Chamber pick the new cable automatically
+      state.settings.cableDevice = null; // let Echo Board pick the new cable automatically
       save();
       await refreshAudioDevices();
       restartAudio();
       if (r && r.restart) {
-        setCableStatus('Installed! Restart your PC to finish. Echo Chamber will use it automatically.', 'ok');
+        setCableStatus('Installed! Restart your PC to finish. Echo Board will use it automatically.', 'ok');
       } else {
-        setCableStatus('Installed! Echo Chamber now sends to VB-Cable.', 'ok');
+        setCableStatus('Installed! Echo Board now sends to VB-Cable.', 'ok');
       }
       toast('Virtual cable installed.');
     }

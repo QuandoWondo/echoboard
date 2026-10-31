@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* Gathers everything the installer ships so Echo Chamber works offline on first launch:
+/* Gathers everything the installer ships so Echo Board works offline on first launch:
    - the free AI voice model (Kokoro-82M, 8-bit) and all of its voices  -> bundled/voice-models
    - the official VB-CABLE driver pack for the target platform          -> bundled/vbcable/<win|mac>
    Usage: node scripts/fetch-bundled.js [win32|darwin]   (defaults to this computer) */

@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:;">
-  <title>Echo Chamber</title>
+  <title>Echo Board</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">ECHO CHAMBER</div>
+    <div class="brand">ECHO BOARD</div>
     <div class="chips">
       <button id="chip-midi" class="chip"></button>
       <button id="chip-out" class="chip"></button>
@@ -168,7 +168,7 @@
       </div>
 
       <h3>AI voices</h3>
-      <p class="note"><b>Free AI voices</b> (Kokoro) run on this computer at no cost, with no account. They come built into Echo Chamber and work offline. Optionally, paste an API key from OpenAI or ElevenLabs for their voices (paid by usage on your account). Keys are stored encrypted on this computer and only sent to that service.</p>
+      <p class="note"><b>Free AI voices</b> (Kokoro) run on this computer at no cost, with no account. They come built into Echo Board and work offline. Optionally, paste an API key from OpenAI or ElevenLabs for their voices (paid by usage on your account). Keys are stored encrypted on this computer and only sent to that service.</p>
       <div class="field">
         <label for="key-openai">OpenAI API key <span id="key-openai-status" class="key-status"></span></label>
         <div class="row nowrap">
@@ -197,8 +197,8 @@
         <h2>Set up voice chat</h2>
         <button class="btn icon close" data-close="cable">&times;</button>
       </div>
-      <p>Discord and games only listen to a microphone. Echo Chamber sends your voice and your sounds into a <b>virtual microphone</b>, and you pick that microphone in Discord.</p>
-      <p>Echo Chamber can install one for you: <b>VB-CABLE</b>, a free virtual audio cable by VB-Audio.</p>
+      <p>Discord and games only listen to a microphone. Echo Board sends your voice and your sounds into a <b>virtual microphone</b>, and you pick that microphone in Discord.</p>
+      <p>Echo Board can install one for you: <b>VB-CABLE</b>, a free virtual audio cable by VB-Audio.</p>
       <ol id="cable-steps-win" class="steps">
         <li>Click <b>Install virtual cable</b>.</li>
         <li>Windows asks to allow changes: click <b>Yes</b>.</li>
@@ -230,20 +230,20 @@
         <h2>Getting sounds into voice chat</h2>
         <button class="btn icon close" data-close="help">&times;</button>
       </div>
-      <p>Discord and games only listen to a microphone. Echo Chamber mixes your real mic with your sounds and sends both into a <b>virtual cable</b>, a free driver that acts like a fake mic.</p>
+      <p>Discord and games only listen to a microphone. Echo Board mixes your real mic with your sounds and sends both into a <b>virtual cable</b>, a free driver that acts like a fake mic.</p>
 
       <h3>1. Install a virtual cable (one time)</h3>
-      <p>Easiest: click <b>No virtual cable</b> at the top (or Settings &rsaquo; Install&hellip;) and Echo Chamber installs VB-CABLE for you. Or install one yourself:</p>
+      <p>Easiest: click <b>No virtual cable</b> at the top (or Settings &rsaquo; Install&hellip;) and Echo Board installs VB-CABLE for you. Or install one yourself:</p>
       <ul>
         <li><b>Windows:</b> VB-Audio Virtual Cable. Install it, then restart your PC. <a href="#" data-link="https://vb-audio.com/Cable/">vb-audio.com/Cable</a></li>
         <li><b>Mac:</b> VB-CABLE (same site) or BlackHole 2ch. <a href="#" data-link="https://existential.audio/blackhole/">existential.audio/blackhole</a></li>
       </ul>
 
-      <h3>2. Point Echo Chamber at it</h3>
+      <h3>2. Point Echo Board at it</h3>
       <p>In <b>Settings</b>, set <b>Send to</b> to <i>CABLE Input</i> (Windows) or <i>BlackHole 2ch</i> (Mac), and pick your real mic under <b>Your microphone</b>.</p>
 
       <h3>3. Point Discord / the game at the cable</h3>
-      <p>Set the voice <b>Input Device</b> to <i>CABLE Output</i> (Windows) or <i>BlackHole 2ch</i> (Mac). Keep Echo Chamber open while you play.</p>
+      <p>Set the voice <b>Input Device</b> to <i>CABLE Output</i> (Windows) or <i>BlackHole 2ch</i> (Mac). Keep Echo Board open while you play.</p>
       <p class="note">Tip: in Discord, turn off Krisp / noise suppression and set input sensitivity low (or use push-to-talk). Noise suppression treats music and sound effects as noise and can mute them.</p>
 
       <h3>Text to speech</h3>
