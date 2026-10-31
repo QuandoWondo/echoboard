@@ -17,11 +17,13 @@ jobs:
       - run: node ci/diagnose.js "dist/win-unpacked/Echo Board.exe" diag
         timeout-minutes: 15
       - name: Save results to the diag-results branch
+        if: always()
         shell: bash
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cd diag
+          git init -q -b diag-results
           git config user.name "Echo Board CI"; git config user.email "noreply@github.com"
-          mkdir -p /tmp/d && cp -r diag/* /tmp/d/
-          git checkout --orphan diag-results
-          git rm -rf . > /dev/null
-          cp -r /tmp/d/* .
-          git add -A && git commit -m "Diagnostics ${{ github.run_id }}" && git push -f origin diag-results
+          git add -A && git commit -q -m "Diagnostics ${{ github.run_id }}"
+          git push -f "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}" diag-results
