@@ -67,6 +67,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .chip.ok::before { background: var(--ok); }
 .chip.warn::before { background: var(--warn); }
 .chip.bad::before { background: var(--bad); }
+.chip.active { border-color: var(--accent); background: var(--accent-soft); }
+.chip.active::before { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 .top-actions { display: flex; gap: 8px; }
 
 /* Buttons — X pills */

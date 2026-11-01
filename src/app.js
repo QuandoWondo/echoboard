@@ -291,7 +291,46 @@ function clearPad(i) {
 
 /* ---------------- MIDI ---------------- */
 
-const midi = { access: null, input: null, output: null, sysex: false };
+/* Pads use the Launchpad "Programmer mode" numbering: bottom-left 11 ... top-right 88,
+   right-hand column CC 19..89, top row CC 91..98. Older Launchpads (Mini MK1/MK2, S, original)
+   use a different "X-Y" layout, so their messages are translated into this numbering. */
+
+const midi = { access: null, inputs: [], output: null, sysex: false, busy: [], last: null };
+const DAW_PORT_RE = /daw|midiin2|midiout2/i;
+
+const isLegacyLaunchpad = (name) => /launchpad (mini|s\b)|^launchpad$|^launchpad[^a-z]*$/i.test(String(name || '').trim()) && !/mk3/i.test(name || '');
+const cleanPortName = (name) => String(name || '').replace(/^MIDI(IN|OUT)\d+\s*\((.*)\)$/i, '$2').trim();
+
+// Older Launchpad -> Programmer numbering
+function fromLegacy(type, num) {
+  if (type === 'note') {
+    const row = Math.floor(num / 16), col = num % 16; // row 0 = top
+    if (row > 7 || col > 8) return { type, num };
+    const r = 7 - row;
+    return col < 8 ? { type: 'note', num: (r + 1) * 10 + col + 1 } : { type: 'cc', num: (r + 1) * 10 + 9 };
+  }
+  if (type === 'cc' && num >= 104 && num <= 111) return { type: 'cc', num: 91 + (num - 104) };
+  return { type, num };
+}
+
+// Programmer numbering -> older Launchpad (for its lights)
+function toLegacy(trig) {
+  if (!trig) return null;
+  if (trig.type === 'cc' && trig.num >= 91 && trig.num <= 98) return { type: 'cc', num: 104 + (trig.num - 91) };
+  const r = Math.floor(trig.num / 10) - 1, c = (trig.num % 10) - 1;
+  if (r < 0 || r > 7) return null;
+  if (trig.type === 'note' && c >= 0 && c <= 7) return { type: 'note', num: (7 - r) * 16 + c };
+  if (trig.type === 'cc' && c === 8) return { type: 'note', num: (7 - r) * 16 + 8 };
+  return null;
+}
+
+// Older Launchpads only have red/green LEDs: velocity = 16*green + red + 12, each 0..3.
+const LEGACY_COLOR = { red: [3, 0], orange: [3, 1], yellow: [2, 3], green: [0, 3], cyan: [0, 3], blue: [3, 3], purple: [3, 1], pink: [3, 0], white: [3, 3] };
+function legacyVelocity(colorId, bright) {
+  const [r, g] = LEGACY_COLOR[colorId] || [3, 3];
+  const k = bright ? 1 : 1 / 3;
+  return 16 * Math.round(g * k) + Math.round(r * k) + 12;
+}
 
 async function initMidi() {
   if (!navigator.requestMIDIAccess) { updateChips(); return; }
@@ -304,42 +343,79 @@ async function initMidi() {
   }
   midi.access.onstatechange = () => { refreshMidiLists(); connectMidi(); };
   refreshMidiLists();
-  connectMidi();
+  await connectMidi();
 }
 
 function livePorts(map) { return [...map.values()].filter((p) => p.state !== 'disconnected'); }
 
-function pickPort(ports, saved, allowFallback) {
+// Which inputs to listen to: the chosen one, or every Launchpad port (falls back to every input).
+function pickInputs(ports, saved) {
+  if (saved === 'none') return [];
+  if (saved) { const p = ports.find((x) => x.name === saved); if (p) return [p]; }
+  const lp = ports.filter((p) => LAUNCHPAD_RE.test(p.name));
+  return lp.length ? lp : ports;
+}
+
+function pickOutput(ports, saved) {
   if (saved === 'none') return null;
   if (saved) { const p = ports.find((x) => x.name === saved); if (p) return p; }
   const lp = ports.filter((p) => LAUNCHPAD_RE.test(p.name));
-  const best = lp.find((p) => !/daw/i.test(p.name)) || lp[0];
-  if (best) return best;
-  return allowFallback ? ports[0] || null : null;
+  return lp.find((p) => !DAW_PORT_RE.test(p.name)) || lp[0] || null;
 }
 
+let connecting = Promise.resolve();
 function connectMidi() {
-  if (!midi.access) return;
-  const inp = pickPort(livePorts(midi.access.inputs), state.settings.midiIn, true);
-  const out = pickPort(livePorts(midi.access.outputs), state.settings.midiOut, false);
+  connecting = connecting.then(doConnectMidi).catch((e) => console.error('MIDI connect failed', e));
+  return connecting;
+}
 
-  if ((inp && inp.id) !== (midi.input && midi.input.id)) {
-    if (midi.input) midi.input.onmidimessage = null;
-    midi.input = inp;
-    if (inp) inp.onmidimessage = onMidi;
+async function doConnectMidi() {
+  if (!midi.access) return;
+  const wanted = pickInputs(livePorts(midi.access.inputs), state.settings.midiIn);
+  const wantedIds = new Set(wanted.map((p) => p.id));
+
+  for (const p of midi.inputs) if (!wantedIds.has(p.id)) { p.onmidimessage = null; try { await p.close(); } catch { /* ignore */ } }
+  midi.inputs = midi.inputs.filter((p) => wantedIds.has(p.id));
+  midi.busy = [];
+  for (const p of wanted) {
+    if (midi.inputs.some((x) => x.id === p.id)) continue;
+    try {
+      await p.open(); // fails if another app (Ableton, Novation Components, a DAW) is using it
+      p.onmidimessage = (e) => onMidi(e, p);
+      midi.inputs.push(p);
+    } catch (e) {
+      console.warn('MIDI input busy', p.name, e);
+      midi.busy.push(cleanPortName(p.name));
+    }
   }
+
+  const out = pickOutput(livePorts(midi.access.outputs), state.settings.midiOut);
   if ((out && out.id) !== (midi.output && midi.output.id)) {
-    midi.output = out;
+    midi.output = null;
     if (out) {
-      enterProgrammerMode();
-      setTimeout(ledAll, 200);
+      try {
+        await out.open();
+        midi.output = out;
+        enterProgrammerMode();
+        setTimeout(ledAll, 250);
+      } catch (e) {
+        console.warn('MIDI output busy', out.name, e);
+        if (!midi.busy.includes(cleanPortName(out.name))) midi.busy.push(cleanPortName(out.name));
+      }
     }
   }
   updateChips();
 }
 
+const outputIsLegacy = () => !!midi.output && isLegacyLaunchpad(cleanPortName(midi.output.name));
+
 function enterProgrammerMode() {
-  if (!midi.output || !midi.sysex) return;
+  if (!midi.output) return;
+  if (outputIsLegacy()) {
+    try { midi.output.send([0xb0, 0x00, 0x00]); } catch { /* ignore */ } // reset; X-Y layout is the default
+    return;
+  }
+  if (!midi.sysex) return;
   // Launchpad X (0x0C), Mini MK3 (0x0D), Pro MK3 (0x0E). Devices ignore IDs that aren't theirs.
   for (const id of [0x0c, 0x0d, 0x0e]) {
     try { midi.output.send([0xf0, 0x00, 0x20, 0x29, 0x02, id, 0x0e, 0x01, 0xf7]); } catch { /* ignore */ }
@@ -348,6 +424,10 @@ function enterProgrammerMode() {
 
 function leaveProgrammerMode() {
   if (!midi.output) return;
+  if (outputIsLegacy()) {
+    try { midi.output.send([0xb0, 0x00, 0x00]); } catch { /* ignore */ }
+    return;
+  }
   state.pads.forEach((p) => sendLed(p.trigger, 0, 0));
   if (state.stopAllTrigger) sendLed(state.stopAllTrigger, 0, 0);
   if (!midi.sysex) return;
@@ -356,22 +436,59 @@ function leaveProgrammerMode() {
   }
 }
 
-function onMidi(e) {
+let unlinkedHintAt = 0;
+function onMidi(e, port) {
   const [st, d1, d2 = 0] = e.data;
   const kind = st & 0xf0;
   let type, down;
   if (kind === 0x90) { type = 'note'; down = d2 > 0; }
-  else if (kind === 0x80) { type = 'note'; down = false; }
   else if (kind === 0xb0) { type = 'cc'; down = d2 > 0; }
+  else if (kind === 0x80) { type = 'note'; down = false; }
   else return;
 
-  if (down && learnTarget !== null) { finishLearn({ type, num: d1 }); return; }
+  let trig = { type, num: d1 };
+  if (port && isLegacyLaunchpad(cleanPortName(port.name))) trig = fromLegacy(type, d1);
+  if (down) {
+    midi.last = { ...trig, port: cleanPortName(port && port.name) };
+    flashMidiChip();
+    renderMidiActivity();
+  }
 
-  const key = type + ':' + d1;
+  if (down && learnTarget !== null) { finishLearn(trig); return; }
+
+  const key = trigKey(trig);
   if (state.stopAllTrigger && key === trigKey(state.stopAllTrigger)) { if (down) stopAll(); return; }
   const i = triggerMap.get(key);
-  if (i === undefined) return;
+  if (i === undefined) {
+    if (down && Date.now() - unlinkedHintAt > 8000) {
+      unlinkedHintAt = Date.now();
+      toast(`That button (${trigText(trig)}) isn't linked to a pad. Select a pad and click Learn button.`);
+    }
+    return;
+  }
+  if (down && !state.pads[i].file) {
+    if (Date.now() - unlinkedHintAt > 4000) {
+      unlinkedHintAt = Date.now();
+      toast(`That's pad ${padLabel(i)}, which has no sound yet.`);
+    }
+    select(i);
+    return;
+  }
   if (down) press(i); else release(i);
+}
+
+let flashTimer = null;
+function flashMidiChip() {
+  const c = $('#chip-midi');
+  c.classList.add('active');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => c.classList.remove('active'), 150);
+}
+
+function renderMidiActivity() {
+  const el = $('#set-midi-last');
+  if (!el) return;
+  el.textContent = midi.last ? `${trigText(midi.last)} from ${midi.last.port}` : 'Press any button on your controller…';
 }
 
 // channel offset: 0 = static, 1 = flashing, 2 = pulsing (Launchpad Programmer mode)
@@ -383,7 +500,14 @@ function sendLed(trig, color, chan) {
 
 function led(i) {
   const pad = state.pads[i];
-  if (!pad) return;
+  if (!pad || !midi.output) return;
+  if (outputIsLegacy()) {
+    const t = toLegacy(pad.trigger);
+    if (!t) return;
+    const vel = pad.file ? legacyVelocity(pad.color, engine.isPlaying(i)) : 12;
+    try { midi.output.send([t.type === 'cc' ? 0xb0 : 0x90, t.num, vel]); } catch { /* ignore */ }
+    return;
+  }
   const col = pad.file ? colorById(pad.color).lp : 0;
   if (engine.isPlaying(i) && col) {
     sendLed(pad.trigger, col, 0);
@@ -395,7 +519,13 @@ function led(i) {
 
 function ledAll() {
   state.pads.forEach((_, i) => led(i));
-  if (state.stopAllTrigger) sendLed(state.stopAllTrigger, 5, 0);
+  if (!state.stopAllTrigger || !midi.output) return;
+  if (outputIsLegacy()) {
+    const t = toLegacy(state.stopAllTrigger);
+    if (t) try { midi.output.send([t.type === 'cc' ? 0xb0 : 0x90, t.num, 15]); } catch { /* ignore */ }
+  } else {
+    sendLed(state.stopAllTrigger, 5, 0);
+  }
 }
 
 /* ---------------- Learn ---------------- */
@@ -404,7 +534,7 @@ function startLearn(target) {
   learnTarget = target;
   renderEditor();
   renderSettingsLearn();
-  if (!midi.input) toast('No MIDI controller connected. Plug in your Launchpad first.');
+  if (!midi.inputs.length) toast(midi.busy.length ? 'Your Launchpad is being used by another app. Close it and try again.' : 'No MIDI controller connected. Plug in your Launchpad first.');
 }
 
 function cancelLearn() {
@@ -545,7 +675,10 @@ function deviceLabel(list, id) {
 }
 
 function updateChips() {
-  if (midi.input) setChip('#chip-midi', 'ok', midi.input.name, 'Controller: ' + midi.input.name);
+  const lpNames = [...new Set(midi.inputs.map((p) => cleanPortName(p.name)).filter((n) => LAUNCHPAD_RE.test(n)))];
+  if (lpNames.length) setChip('#chip-midi', 'ok', lpNames[0], 'Controller: ' + lpNames.join(', ') + ' (flashes when you press a button)');
+  else if (midi.busy.length) setChip('#chip-midi', 'bad', 'Launchpad busy', 'Another app is using ' + midi.busy[0] + '. Close Ableton, FL Studio, Novation Components or other music apps, then unplug and replug the Launchpad.');
+  else if (midi.inputs.length) setChip('#chip-midi', 'ok', 'MIDI: ' + cleanPortName(midi.inputs[0].name), 'Listening to: ' + midi.inputs.map((p) => cleanPortName(p.name)).join(', '));
   else setChip('#chip-midi', 'warn', 'No controller', 'Plug in your Launchpad');
 
   if (engine.routeOk) {
@@ -597,7 +730,7 @@ function refreshMidiLists() {
   }
   const ins = livePorts(midi.access.inputs).map((p) => ({ v: p.name, t: p.name }));
   const outs = livePorts(midi.access.outputs).map((p) => ({ v: p.name, t: p.name }));
-  fillSelect('#set-midi-in', [{ v: '', t: 'Auto (find Launchpad)' }, { v: 'none', t: 'None' }, ...ins], state.settings.midiIn);
+  fillSelect('#set-midi-in', [{ v: '', t: 'Auto (all Launchpad connections)' }, { v: 'none', t: 'None' }, ...ins], state.settings.midiIn);
   fillSelect('#set-midi-out', [{ v: '', t: 'Auto (find Launchpad)' }, { v: 'none', t: 'None (no lights)' }, ...outs], state.settings.midiOut);
 }
 
@@ -930,6 +1063,7 @@ function wireCable() {
 }
 
 function openSettings() {
+  renderMidiActivity();
   refreshAudioDevices();
   refreshMidiLists();
   refreshKeyStatus();
