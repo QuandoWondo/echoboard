@@ -183,6 +183,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .cable-status { font-size: 14px; color: var(--muted); }
 .cable-status.ok { color: var(--ok); font-weight: 700; }
 .cable-status.bad { color: var(--bad); }
+.meter { height: 8px; border-radius: 9999px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.meter span { display: block; height: 100%; width: 0; background: var(--ok); transition: width 0.06s linear; }
+.meter span.hot { background: var(--warn); }
 .key-status { color: var(--ok); font-weight: 700; }
 .row.nowrap { flex-wrap: nowrap; }
 .row.nowrap input { flex: 1; min-width: 0; }

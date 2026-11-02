@@ -33,7 +33,7 @@ const DEFAULT_SETTINGS = {
   monitorDevice: '', // '' = system default
   micEnabled: true,
   micVolume: 1,
-  masterVolume: 1,
+  masterVolume: 0.8,
   monitorVolume: 0.8,
   cableSetupShown: false,
   tts: { provider: 'kokoro', voice: { kokoro: 'af_heart', system: '', openai: 'alloy', elevenlabs: '' }, style: '', v: 2 },
@@ -111,17 +111,35 @@ class Engine {
 
   async start(s) {
     await this.shutdown();
-    this.main = new AudioContext({ latencyHint: 'interactive' });
+    // Voice-chat mix: 48 kHz to match Discord and VB-CABLE, with a little more buffer than the
+    // headphone mix so it doesn't crackle when the computer is busy (e.g. a game is running).
+    this.main = new AudioContext({ latencyHint: 'balanced', sampleRate: 48000 });
     this.mon = new AudioContext({ latencyHint: 'interactive' });
     this.routeOk = !!s.cableDevice && (await setSink(this.main, s.cableDevice));
     await setSink(this.mon, s.monitorDevice);
 
+    // Everything friends hear goes through one limiter, so voice + a loud sound never clip.
+    this.mixBus = this.main.createGain();
+    this.limiter = this.main.createDynamicsCompressor();
+    this.limiter.threshold.value = -6;
+    this.limiter.knee.value = 4;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.002;
+    this.limiter.release.value = 0.12;
+    const ceiling = this.main.createGain();
+    ceiling.gain.value = 0.9;
+    this.meter = this.main.createAnalyser();
+    this.meter.fftSize = 1024;
+    this.mixBus.connect(this.limiter);
+    this.limiter.connect(ceiling);
+    ceiling.connect(this.main.destination);
+    this.mixBus.connect(this.meter);
     this.mainOut = this.main.createGain();
-    this.mainOut.connect(this.main.destination);
+    this.mainOut.connect(this.mixBus);
     this.monOut = this.mon.createGain();
     this.monOut.connect(this.mon.destination);
     this.micGain = this.main.createGain();
-    this.micGain.connect(this.main.destination);
+    this.micGain.connect(this.mixBus);
 
     this.micError = null;
     // Only pass the mic through when it's going into a cable — never to speakers (feedback).
@@ -142,6 +160,16 @@ class Engine {
     }
     this.setLevels(s);
     try { await this.main.resume(); await this.mon.resume(); } catch { /* ignore */ }
+  }
+
+  // Peak level of the voice-chat mix before the limiter (1.0 = full scale).
+  mixPeak() {
+    if (!this.meter) return 0;
+    const buf = new Float32Array(this.meter.fftSize);
+    this.meter.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (const v of buf) { const a = Math.abs(v); if (a > peak) peak = a; }
+    return peak;
   }
 
   setLevels(s) {
@@ -696,7 +724,20 @@ function updateChips() {
   else setChip('#chip-mic', 'ok', 'Mic on', micLabel || 'System default mic');
 }
 
+let meterHold = 0;
+function renderMixMeter() {
+  const bar = $('#mix-meter');
+  if (!bar || $('#settings').classList.contains('hidden')) return;
+  const peak = engine.mixPeak();
+  meterHold = Math.max(peak, meterHold * 0.92);
+  bar.style.width = Math.min(100, meterHold * 100) + '%';
+  bar.classList.toggle('hot', meterHold > 0.5);   // limiter is working
+  const note = $('#mix-meter-note');
+  if (note) note.textContent = !engine.routeOk ? 'No virtual cable selected' : meterHold > 0.98 ? 'Very loud: lower Mic or Soundboard volume' : meterHold > 0.5 ? 'Loud (auto-limited, no distortion)' : meterHold > 0.02 ? 'Good' : 'Silent';
+}
+
 function progressLoop() {
+  renderMixMeter();
   for (const i of engine.voices.keys()) padEls[i] && padEls[i].style.setProperty('--p', engine.progress(i));
   requestAnimationFrame(progressLoop);
 }
