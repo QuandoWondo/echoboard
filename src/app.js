@@ -109,14 +109,14 @@ class Engine {
     this.onVoiceEnd = () => {};
   }
 
-  async start(s) {
+  async start(s, dev = { mic: s.micDevice, monitor: s.monitorDevice }) {
     await this.shutdown();
     // Voice-chat mix: 48 kHz to match Discord and VB-CABLE, with a little more buffer than the
     // headphone mix so it doesn't crackle when the computer is busy (e.g. a game is running).
     this.main = new AudioContext({ latencyHint: 'balanced', sampleRate: 48000 });
     this.mon = new AudioContext({ latencyHint: 'interactive' });
     this.routeOk = !!s.cableDevice && (await setSink(this.main, s.cableDevice));
-    await setSink(this.mon, s.monitorDevice);
+    await setSink(this.mon, dev.monitor);
 
     // Everything friends hear goes through one limiter, so voice + a loud sound never clip.
     this.mixBus = this.main.createGain();
@@ -143,11 +143,13 @@ class Engine {
 
     this.micError = null;
     // Only pass the mic through when it's going into a cable — never to speakers (feedback).
-    if (this.routeOk && s.micEnabled) {
+    if (this.routeOk && s.micEnabled && dev.mic === null) {
+      this.micError = 'No microphone found. Plug in your mic, then pick it in Settings.';
+    } else if (this.routeOk && s.micEnabled) {
       try {
         this.mic = await navigator.mediaDevices.getUserMedia({
           audio: {
-            deviceId: s.micDevice ? { exact: s.micDevice } : undefined,
+            deviceId: dev.mic ? { exact: dev.mic } : undefined,
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
@@ -717,11 +719,11 @@ function updateChips() {
   }
 
   const s = state.settings;
-  const micLabel = s.micDevice ? deviceLabel(audioDevices.ins, s.micDevice) : (audioDevices.defaultInLabel || '');
+  const micLabel = micInUseLabel();
   if (!engine.routeOk || !s.micEnabled) setChip('#chip-mic', '', 'Mic off');
   else if (engine.micError) setChip('#chip-mic', 'bad', 'Mic error', engine.micError);
-  else if (CABLE_MIC_RE.test(micLabel)) setChip('#chip-mic', 'bad', 'Mic is the cable!', 'Your mic is set to the virtual cable, which loops. Pick your real mic.');
-  else setChip('#chip-mic', 'ok', 'Mic on', micLabel || 'System default mic');
+  else if (!micLabel) setChip('#chip-mic', 'bad', 'No mic found', 'Plug in your microphone, then pick it in Settings.');
+  else setChip('#chip-mic', 'ok', 'Mic: ' + micLabel.replace(/\s*\(.*\)\s*$/, ''), 'Friends hear this mic plus your sounds: ' + micLabel);
 }
 
 let meterHold = 0;
@@ -750,7 +752,8 @@ function fillSelect(sel, options, value) {
   for (const o of options) {
     const opt = document.createElement('option');
     opt.value = o.v;
-    opt.textContent = o.t;
+    opt.textContent = o.off ? o.t + ' (virtual cable, not usable here)' : o.t;
+    if (o.off) opt.disabled = true;
     el.appendChild(opt);
   }
   if (value != null && options.some((o) => o.v === value)) el.value = value;
@@ -775,6 +778,43 @@ function refreshMidiLists() {
   fillSelect('#set-midi-out', [{ v: '', t: 'Auto (find Launchpad)' }, { v: 'none', t: 'None (no lights)' }, ...outs], state.settings.midiOut);
 }
 
+/* Installing a virtual cable often makes Windows switch its *default* mic to "CABLE Output" and
+   its default speakers to "CABLE Input". If Echo Board followed those defaults it would listen to
+   its own output (a feedback loop: loud banging, your voice drowned out). So the mic and the
+   headphones are never allowed to be a virtual cable. */
+const isCableCapture = (label) => CABLE_MIC_RE.test(label || '');
+const isCablePlayback = (label) => CABLE_OUT_RE.test(label || '');
+const isLoopbackInput = (label) => /stereo mix|what u hear|wave out mix/i.test(label || '');
+
+// '' = system default, a deviceId, or null = no usable mic
+function resolveMic() {
+  const s = state.settings, ins = audioDevices.ins;
+  const chosen = ins.find((d) => d.deviceId === s.micDevice);
+  if (chosen && !isCableCapture(chosen.label)) return chosen.deviceId;
+  if (audioDevices.defaultInLabel && !isCableCapture(audioDevices.defaultInLabel)) return '';
+  const realMic = ins.find((d) => !isCableCapture(d.label) && !isLoopbackInput(d.label));
+  if (realMic) return realMic.deviceId;
+  return ins.length && !audioDevices.defaultInLabel ? '' : null; // labels unknown: trust the default
+}
+
+function resolveMonitor() {
+  const s = state.settings, outs = audioDevices.outs;
+  const chosen = outs.find((d) => d.deviceId === s.monitorDevice);
+  if (chosen && !isCablePlayback(chosen.label)) return chosen.deviceId;
+  if (!audioDevices.defaultOutLabel || !isCablePlayback(audioDevices.defaultOutLabel)) return '';
+  const real = outs.find((d) => !isCablePlayback(d.label));
+  return real ? real.deviceId : '';
+}
+
+const resolveDevices = () => ({ mic: resolveMic(), monitor: resolveMonitor() });
+
+function micInUseLabel() {
+  const id = resolveMic();
+  if (id === null) return '';
+  if (id === '') return (audioDevices.defaultInLabel || 'System default mic').replace(/^Default - /, '');
+  return deviceLabel(audioDevices.ins, id);
+}
+
 async function refreshAudioDevices() {
   let devs = await navigator.mediaDevices.enumerateDevices();
   if (!devs.some((d) => d.label)) {
@@ -787,10 +827,12 @@ async function refreshAudioDevices() {
   }
   const real = (d) => d.deviceId !== 'default' && d.deviceId !== 'communications';
   const defIn = devs.find((d) => d.kind === 'audioinput' && d.deviceId === 'default');
+  const defOut = devs.find((d) => d.kind === 'audiooutput' && d.deviceId === 'default');
   audioDevices = {
     ins: devs.filter((d) => d.kind === 'audioinput' && real(d)),
     outs: devs.filter((d) => d.kind === 'audiooutput' && real(d)),
     defaultInLabel: defIn ? defIn.label : '',
+    defaultOutLabel: defOut ? defOut.label : '',
   };
 
   let changed = false;
@@ -802,10 +844,20 @@ async function refreshAudioDevices() {
   const lbl = (d, n) => d.label || n;
   fillSelect('#set-cable', [{ v: '', t: 'None (headphones only)' },
     ...audioDevices.outs.map((d, n) => ({ v: d.deviceId, t: lbl(d, 'Output ' + (n + 1)) }))], state.settings.cableDevice || '');
-  fillSelect('#set-mic', [{ v: '', t: 'System default' },
-    ...audioDevices.ins.map((d, n) => ({ v: d.deviceId, t: lbl(d, 'Input ' + (n + 1)) }))], state.settings.micDevice);
-  fillSelect('#set-monitor', [{ v: '', t: 'System default' },
-    ...audioDevices.outs.map((d, n) => ({ v: d.deviceId, t: lbl(d, 'Output ' + (n + 1)) }))], state.settings.monitorDevice);
+  // A virtual cable saved as mic/headphones (from before this was blocked) is cleared.
+  const st = state.settings;
+  const cableMic = audioDevices.ins.find((d) => d.deviceId === st.micDevice && isCableCapture(d.label));
+  const cableMon = audioDevices.outs.find((d) => d.deviceId === st.monitorDevice && isCablePlayback(d.label));
+  if (cableMic) st.micDevice = '';
+  if (cableMon) st.monitorDevice = '';
+  if (cableMic || cableMon) save();
+  const usingMic = micInUseLabel();
+  fillSelect('#set-mic', [{ v: '', t: 'Automatic' + (usingMic ? ' (' + usingMic + ')' : '') },
+    ...audioDevices.ins.map((d, n) => ({ v: d.deviceId, t: lbl(d, 'Input ' + (n + 1)), off: isCableCapture(d.label) }))], state.settings.micDevice);
+  const monId = resolveMonitor();
+  const monName = monId ? deviceLabel(audioDevices.outs, monId) : (audioDevices.defaultOutLabel || '').replace(/^Default - /, '');
+  fillSelect('#set-monitor', [{ v: '', t: 'Automatic' + (monName ? ' (' + monName + ')' : '') },
+    ...audioDevices.outs.map((d, n) => ({ v: d.deviceId, t: lbl(d, 'Output ' + (n + 1)), off: isCablePlayback(d.label) }))], state.settings.monitorDevice);
   return changed;
 }
 
@@ -824,7 +876,7 @@ let restartTimer = null;
 function restartAudio() {
   clearTimeout(restartTimer);
   restartTimer = setTimeout(async () => {
-    await engine.start(state.settings);
+    await engine.start(state.settings, resolveDevices());
     state.pads.forEach((_, i) => renderPad(i));
     ledAll();
     updateChips();
@@ -1248,7 +1300,7 @@ async function boot() {
 
   loadTtsVoices();
   await step('audio devices', refreshAudioDevices());
-  await step('audio engine', engine.start(state.settings));
+  await step('audio engine', engine.start(state.settings, resolveDevices()));
   updateChips();
   // First run with no virtual cable: offer to set one up (once).
   if (!engine.routeOk && !state.settings.cableSetupShown && (echo.platform === 'win32' || echo.platform === 'darwin')) {
