@@ -615,11 +615,33 @@ function buildGrid() {
       el.innerHTML = '<span class="pad-name"></span><span class="pad-tag"></span><span class="pad-prog"></span>';
       el.addEventListener('click', () => select(i));
       el.addEventListener('dblclick', () => press(i));
-      el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drop'); });
+      // Drag a pad onto another to move it (swaps if the spot is taken). Ctrl/Option-drag copies.
+      el.addEventListener('dragstart', (e) => {
+        if (!state.pads[i].file) { e.preventDefault(); return; }
+        dragFrom = i;
+        e.dataTransfer.setData(PAD_DRAG_TYPE, String(i));
+        e.dataTransfer.effectAllowed = 'copyMove';
+        el.classList.add('dragging');
+      });
+      el.addEventListener('dragend', () => {
+        dragFrom = null;
+        el.classList.remove('dragging');
+        padEls.forEach((p) => p.classList.remove('drop'));
+      });
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (dragFrom !== null) e.dataTransfer.dropEffect = (e.ctrlKey || e.altKey) ? 'copy' : 'move';
+        if (dragFrom !== i) el.classList.add('drop');
+      });
       el.addEventListener('dragleave', () => el.classList.remove('drop'));
       el.addEventListener('drop', async (e) => {
         e.preventDefault();
         el.classList.remove('drop');
+        const from = e.dataTransfer.types.includes(PAD_DRAG_TYPE) ? Number(e.dataTransfer.getData(PAD_DRAG_TYPE)) : null;
+        if (from !== null && !Number.isNaN(from)) {
+          movePad(from, i, e.ctrlKey || e.altKey);
+          return;
+        }
         const file = e.dataTransfer.files[0];
         if (!file) return;
         try {
@@ -636,12 +658,45 @@ function buildGrid() {
   state.pads.forEach((_, i) => renderPad(i));
 }
 
+const PAD_DRAG_TYPE = 'application/x-echo-board-pad';
+let dragFrom = null;
+
+// What belongs to the sound (moves with it). The Launchpad button stays with the grid position.
+const PAD_CONTENT_KEYS = ['name', 'file', 'volume', 'color', 'mode', 'choke'];
+const padContent = (p) => Object.fromEntries(PAD_CONTENT_KEYS.map((k) => [k, p[k]]));
+
+function movePad(from, to, copy) {
+  if (from === to || !state.pads[from] || !state.pads[to]) return;
+  const a = state.pads[from], b = state.pads[to];
+  if (!a.file) return;
+  engine.stop(from);
+  engine.stop(to);
+  const aContent = padContent(a), bContent = padContent(b);
+  if (copy) {
+    Object.assign(b, aContent);
+  } else {
+    Object.assign(b, aContent);
+    if (bContent.file) Object.assign(a, bContent);            // swap
+    else Object.assign(a, padContent({ ...defaultPad(from) }));  // move into an empty spot
+  }
+  const aMissing = missing.has(from), bMissing = missing.has(to);
+  missing.delete(from); missing.delete(to);
+  if (aMissing) missing.add(to);
+  if (!copy && bMissing && bContent.file) missing.add(from);
+  if (copy && aMissing) missing.add(from);
+  [from, to].forEach((k) => { renderPad(k); led(k); });
+  select(to);
+  save();
+  toast(copy ? `Copied to pad ${padLabel(to)}` : bContent.file ? `Swapped pads ${padLabel(from)} and ${padLabel(to)}` : `Moved to pad ${padLabel(to)}`);
+}
+
 function renderPad(i) {
   const el = padEls[i];
   const pad = state.pads[i];
   if (!el || !pad) return;
   el.style.setProperty('--pc', colorById(pad.color).hex);
   el.classList.toggle('assigned', !!pad.file);
+  el.draggable = !!pad.file;
   el.classList.toggle('playing', engine.isPlaying(i));
   el.classList.toggle('selected', i === selected);
   el.classList.toggle('missing', missing.has(i));

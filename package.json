@@ -1,7 +1,7 @@
 {
   "name": "echo-board",
   "productName": "Echo Board",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "Launchpad soundboard that plays sounds through your mic into Discord and game voice chat.",
   "main": "main.js",
   "author": "Echo Board",

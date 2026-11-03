@@ -46,6 +46,7 @@ Unsigned builds: on Windows, SmartScreen says "Windows protected your PC" → **
 
 - **Assign a sound:** click a pad, then **Choose sound…**, or drag an audio file onto a pad. Files are copied into the app's own library, so moving the original won't break anything.
 - **Formats:** mp3, wav, ogg, flac, m4a/aac, opus.
+- **Rearrange:** drag a pad onto another spot to move it. If that spot already has a sound, they swap. Hold **Ctrl** (Windows) or **Option** (Mac) while dropping to copy instead. Launchpad buttons stay with their grid position, so the sound you move follows its new spot on the Launchpad too.
 - **Pad modes:**
   - **One-shot**: press again to restart
   - **Toggle**: press again to stop
