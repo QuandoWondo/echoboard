@@ -2,39 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob: echo-media:; connect-src 'self' echo-media:;">
   <title>Echo Board</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand" role="img" aria-label="Echo Board" title="Echo Board"></div>
+    <button id="btn-profile" class="profile-btn" title="Profiles: whole layouts you can switch between">Default &#9662;</button>
     <div class="chips">
       <button id="chip-midi" class="chip"></button>
       <button id="chip-out" class="chip"></button>
       <button id="chip-mic" class="chip"></button>
+      <button id="chip-fx" class="chip fx-chip" title="Voice changer"></button>
     </div>
     <div class="top-actions">
-      <button id="btn-stopall" class="btn danger" title="Stop all sounds (Esc, or Ctrl/Cmd+Shift+K from anywhere)">&#9632; Stop all</button>
+      <button id="btn-replay" class="btn hidden" title="Save the last few seconds to a pad">&#10226; Save replay</button>
+      <button id="btn-stopall" class="btn danger" title="Stop all sounds (Esc)">&#9632; Stop all</button>
       <button id="btn-settings" class="btn">Settings</button>
-      <button id="btn-help" class="btn icon" title="Setup help">?</button>
+      <button id="btn-help" class="btn icon" title="Help">?</button>
     </div>
   </header>
 
   <main class="layout">
     <section class="board">
+      <nav id="pages" class="pages" aria-label="Pages"></nav>
       <div class="grid-wrap"><div id="grid" class="grid"></div></div>
-      <p class="hint">Click a pad to edit it &middot; double-click or Space to preview &middot; drag pads to rearrange (Ctrl/Option to copy) &middot; drop audio files onto pads</p>
+      <p class="hint">Click a pad to edit &middot; double-click or Space to preview &middot; drag to rearrange (Ctrl/Option copies) &middot; drag onto a page tab to move it there &middot; drop audio files onto pads</p>
 
       <section id="tts" class="tts">
         <textarea id="tts-text" rows="2" maxlength="1000" placeholder="Type something for voice chat to hear&hellip;"></textarea>
-        <input id="tts-style" class="tts-style hidden" type="text" maxlength="300" placeholder="Voice style (optional), e.g. hyped sports announcer, sleepy pirate">
         <div class="tts-bar">
           <select id="tts-provider" class="pill-select" title="Voice engine">
             <option value="kokoro">Free AI voices</option>
             <option value="system">Built-in voices</option>
-            <option value="openai">OpenAI voices</option>
-            <option value="elevenlabs">ElevenLabs voices</option>
           </select>
           <select id="tts-voice" class="pill-select" title="Voice"></select>
           <span id="tts-status" class="tts-status"></span>
@@ -58,8 +59,15 @@
         <div id="ed-file" class="filebox muted">No sound yet</div>
         <div class="row">
           <button id="ed-pick" class="btn primary">Choose sound&hellip;</button>
+          <button id="ed-video" class="btn" title="Grab audio from a video, like a gaming recording">From video&hellip;</button>
           <button id="ed-preview" class="btn">&#9654; Preview</button>
         </div>
+      </div>
+
+      <div id="ed-trim-field" class="field">
+        <label>Trim <span id="ed-trim-val" class="muted"></span></label>
+        <canvas id="ed-wave" class="wave" width="576" height="112" title="Drag the edges to set where the sound starts and ends"></canvas>
+        <div class="row"><button id="ed-trim-reset" class="btn small">Reset trim</button><span class="note">Drag the white edges to cut the start or end.</span></div>
       </div>
 
       <div class="field">
@@ -100,11 +108,86 @@
         </div>
       </div>
 
+      <div class="field">
+        <label>Keyboard shortcut <span class="muted">(works in games too)</span></label>
+        <div class="row">
+          <button id="ed-hotkey" class="btn">Set shortcut</button>
+          <button id="ed-hotkey-clear" class="btn ghost small hidden">Remove</button>
+        </div>
+      </div>
+
       <div class="editor-foot">
         <button id="ed-clear" class="btn ghost">Clear pad</button>
       </div>
     </aside>
   </main>
+
+  <!-- Profiles -->
+  <div id="profiles" class="overlay hidden">
+    <div class="panel small-panel">
+      <div class="panel-head">
+        <h2>Profiles</h2>
+        <button class="btn icon close" data-close="profiles">&times;</button>
+      </div>
+      <p class="note">A profile is a whole layout (8 pages of pads). Make one per game or per group of friends.</p>
+      <div class="field">
+        <label for="profile-name">Name of this profile</label>
+        <input id="profile-name" type="text" maxlength="30">
+      </div>
+      <div id="profile-list" class="profile-list"></div>
+      <div class="row">
+        <button id="profile-new" class="btn primary">New profile</button>
+        <button id="profile-dup" class="btn">Duplicate</button>
+        <button id="profile-del" class="btn ghost">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice changer -->
+  <div id="fx" class="overlay hidden">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Voice changer</h2>
+        <button class="btn icon close" data-close="fx">&times;</button>
+      </div>
+      <div class="row fx-top">
+        <label class="switch"><input id="fx-on" type="checkbox"><span></span></label>
+        <span id="fx-state" class="fx-state">Off</span>
+        <span class="spacer"></span>
+        <span class="note" id="fx-note"></span>
+      </div>
+      <div id="fx-grid" class="fx-grid"></div>
+      <div class="field">
+        <label for="fx-mix">Intensity <span id="fx-mix-val" class="muted"></span></label>
+        <input id="fx-mix" type="range" min="0" max="100" step="1">
+      </div>
+      <label class="check">
+        <input id="fx-hear" type="checkbox">
+        <span>Hear myself (in my headphones) while setting it up</span>
+      </label>
+      <p class="note">Effects change only your voice; your soundboard sounds stay clean. Turn it on and off with the switch, a Launchpad button or a keyboard shortcut (Settings &rsaquo; Buttons &amp; shortcuts). Everything runs on this computer.</p>
+    </div>
+  </div>
+
+  <!-- Import from video -->
+  <div id="video" class="overlay hidden">
+    <div class="panel wide-panel">
+      <div class="panel-head">
+        <h2>Grab a sound from a video</h2>
+        <button class="btn icon close" data-close="video">&times;</button>
+      </div>
+      <video id="vid" class="vid" controls crossorigin="anonymous" preload="auto"></video>
+      <div class="row vid-row">
+        <button id="vid-start" class="btn">Set start</button>
+        <button id="vid-end" class="btn">Set end</button>
+        <span id="vid-range" class="muted"></span>
+        <span class="spacer"></span>
+        <button id="vid-preview" class="btn">&#9654; Play selection</button>
+        <button id="vid-save" class="btn primary">Save to pad</button>
+      </div>
+      <p id="vid-status" class="note">Play or scrub to the moment you want, then set the start and end (up to 60 seconds).</p>
+    </div>
+  </div>
 
   <!-- Settings -->
   <div id="settings" class="overlay hidden">
@@ -128,13 +211,14 @@
         <div id="set-midi-last" class="filebox">Press any button on your controller&hellip;</div>
         <p class="note">If nothing shows up here when you press a button, close other music apps (Ableton, FL Studio, Novation Components), then unplug and replug the Launchpad.</p>
       </div>
-      <div class="field">
-        <label>Stop-all button</label>
-        <div class="row">
-          <button id="set-stop-learn" class="btn">Learn button</button>
-          <span id="set-stop-label" class="muted"></span>
-        </div>
-      </div>
+      <label class="check">
+        <input id="set-toprow" type="checkbox">
+        <span>Launchpad top row switches pages (buttons 1&ndash;8)</span>
+      </label>
+
+      <h3>Buttons &amp; shortcuts</h3>
+      <p class="note">Launchpad buttons and keyboard shortcuts for actions. Defaults use the round buttons on the right side of the Launchpad.</p>
+      <div id="action-list" class="action-list"></div>
 
       <h3>Voice chat</h3>
       <div class="field">
@@ -143,7 +227,7 @@
           <select id="set-cable"></select>
           <button id="set-cable-install" class="btn">Install&hellip;</button>
         </div>
-        <p class="note">Windows: <b>CABLE Input</b>. Mac: <b>BlackHole 2ch</b>. Then pick the matching cable as your mic in Discord or the game.</p>
+        <p class="note">Windows: <b>CABLE Input</b>. Mac: <b>VB-Cable</b> or <b>BlackHole 2ch</b>. Then pick the matching cable as your mic in Discord or the game.</p>
       </div>
       <div class="field">
         <label for="set-mic">Your microphone</label>
@@ -161,10 +245,66 @@
         <label for="set-master">Soundboard volume (what friends hear) <span id="set-master-val" class="muted"></span></label>
         <input id="set-master" type="range" min="0" max="150" step="1">
       </div>
+      <label class="check">
+        <input id="set-even" type="checkbox">
+        <span>Even out sound volumes (quiet clips get louder, loud ones softer)</span>
+      </label>
       <div class="field">
         <label>What friends hear <span id="mix-meter-note" class="muted"></span></label>
         <div class="meter"><span id="mix-meter"></span></div>
       </div>
+
+      <h3>Auto push-to-talk</h3>
+      <p class="note">If you use push-to-talk in Discord, Echo Board can hold your push-to-talk key while a sound or voice plays, so friends hear it without you holding the key. It only presses the one key you pick.</p>
+      <label class="check">
+        <input id="set-ptt-on" type="checkbox">
+        <span>Hold my push-to-talk key while sounds play</span>
+      </label>
+      <div class="field">
+        <label>My Discord push-to-talk key</label>
+        <div class="row">
+          <button id="set-ptt-key" class="btn">Set key</button>
+          <span id="set-ptt-note" class="muted"></span>
+        </div>
+      </div>
+
+      <h3>Ducking</h3>
+      <label class="check">
+        <input id="set-duck-mic" type="checkbox">
+        <span>Lower my mic while a sound plays</span>
+      </label>
+      <div class="field indent">
+        <label for="set-duck-mic-lvl">Mic level during sounds <span id="set-duck-mic-val" class="muted"></span></label>
+        <input id="set-duck-mic-lvl" type="range" min="0" max="100" step="1">
+      </div>
+      <label class="check">
+        <input id="set-duck-snd" type="checkbox">
+        <span>Lower sounds while I'm talking</span>
+      </label>
+      <div class="field indent">
+        <label for="set-duck-snd-lvl">Sound level while talking <span id="set-duck-snd-val" class="muted"></span></label>
+        <input id="set-duck-snd-lvl" type="range" min="0" max="100" step="1">
+      </div>
+
+      <h3>Instant replay</h3>
+      <p class="note">When on, Echo Board keeps only the last few seconds of audio <b>in memory</b>. Nothing is saved anywhere until you press <b>Save replay</b>, and it's thrown away when you turn this off or close the app. <span id="set-replay-src"></span></p>
+      <label class="check">
+        <input id="set-replay-on" type="checkbox">
+        <span>Keep a replay buffer</span>
+      </label>
+      <div class="field indent">
+        <label for="set-replay-len">Length</label>
+        <select id="set-replay-len">
+          <option value="15">Last 15 seconds</option>
+          <option value="30">Last 30 seconds</option>
+          <option value="60">Last 60 seconds</option>
+        </select>
+      </div>
+      <label class="check indent">
+        <input id="set-replay-mic" type="checkbox">
+        <span>Include my own voice</span>
+      </label>
+      <p id="set-replay-status" class="note"></p>
 
       <h3>Your headphones</h3>
       <div class="field">
@@ -176,25 +316,22 @@
         <input id="set-monitor-vol" type="range" min="0" max="150" step="1">
       </div>
 
-      <h3>AI voices</h3>
-      <p class="note"><b>Free AI voices</b> (Kokoro) run on this computer at no cost, with no account. They come built into Echo Board and work offline. Optionally, paste an API key from OpenAI or ElevenLabs for their voices (paid by usage on your account). Keys are stored encrypted on this computer and only sent to that service.</p>
+      <h3>Extra output (OBS / recording)</h3>
       <div class="field">
-        <label for="key-openai">OpenAI API key <span id="key-openai-status" class="key-status"></span></label>
-        <div class="row nowrap">
-          <input id="key-openai" type="password" autocomplete="off" spellcheck="false" placeholder="sk-...">
-          <button class="btn" data-savekey="openai">Save</button>
-          <button class="btn ghost hidden" data-removekey="openai">Remove</button>
-        </div>
-        <p class="note">Get one at <a href="#" data-link="https://platform.openai.com/api-keys">platform.openai.com/api-keys</a></p>
+        <label for="set-extra">Also send sounds to</label>
+        <select id="set-extra"></select>
+        <p class="note">For streaming or recording: pick a second device (for example a second virtual cable) and add it as an audio source in OBS.</p>
       </div>
-      <div class="field">
-        <label for="key-elevenlabs">ElevenLabs API key <span id="key-elevenlabs-status" class="key-status"></span></label>
-        <div class="row nowrap">
-          <input id="key-elevenlabs" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key">
-          <button class="btn" data-savekey="elevenlabs">Save</button>
-          <button class="btn ghost hidden" data-removekey="elevenlabs">Remove</button>
-        </div>
-        <p class="note">Get one at <a href="#" data-link="https://elevenlabs.io/app/settings/api-keys">elevenlabs.io &rsaquo; Settings &rsaquo; API keys</a></p>
+      <label class="check indent">
+        <input id="set-extra-voice" type="checkbox">
+        <span>Include my voice (with effects)</span>
+      </label>
+
+      <h3>Privacy</h3>
+      <p class="note"><b>Echo Board is offline-only.</b> It is blocked from connecting to the internet: no accounts, no tracking, no cloud. Your sounds, voices, recordings and settings stay on this computer. Links you click (like vb-cable.com) open in your own browser.</p>
+      <div class="row">
+        <button id="set-privacy-check" class="btn">Check network block</button>
+        <span id="set-privacy-result" class="muted"></span>
       </div>
     </div>
   </div>
@@ -207,7 +344,7 @@
         <button class="btn icon close" data-close="cable">&times;</button>
       </div>
       <p>Discord and games only listen to a microphone. Echo Board sends your voice and your sounds into a <b>virtual microphone</b>, and you pick that microphone in Discord.</p>
-      <p>Echo Board can install one for you: <b>VB-CABLE</b>, a free virtual audio cable by VB-Audio.</p>
+      <p>Echo Board can install one for you: <b>VB-CABLE</b>, a free virtual audio cable by VB-Audio (included with Echo Board).</p>
       <ol id="cable-steps-win" class="steps">
         <li>Click <b>Install virtual cable</b>.</li>
         <li>Windows asks to allow changes: click <b>Yes</b>.</li>
@@ -225,7 +362,7 @@
       </div>
 
       <h3>Then in Discord</h3>
-      <p>User Settings &rsaquo; Voice &amp; Video &rsaquo; <b>Input Device</b>: choose <b class="cable-mic-name">CABLE Output</b>. Turn off Krisp / noise suppression. In games, pick the same device as your microphone.</p>
+      <p>User Settings &rsaquo; Voice &amp; Video &rsaquo; <b>Input Device</b>: choose <b class="cable-mic-name">CABLE Output</b>, and set <b>Output Device</b> to your headphones. Turn off Krisp / noise suppression and echo cancellation. In games, pick the same device as your microphone.</p>
 
       <p class="note">VB-CABLE is made by VB-Audio (<a href="#" data-link="https://vb-audio.com/Cable/">vb-cable.com</a>). VB-CABLE is a donationware, all participations are welcome. You can donate on their site.</p>
       <p class="note">Already use BlackHole or VoiceMeeter? Pick it under Settings &rsaquo; Send to instead.</p>
@@ -236,36 +373,41 @@
   <div id="help" class="overlay hidden">
     <div class="panel">
       <div class="panel-head">
-        <h2>Getting sounds into voice chat</h2>
+        <h2>Help</h2>
         <button class="btn icon close" data-close="help">&times;</button>
       </div>
-      <p>Discord and games only listen to a microphone. Echo Board mixes your real mic with your sounds and sends both into a <b>virtual cable</b>, a free driver that acts like a fake mic.</p>
+      <h3>Voice chat setup</h3>
+      <p>Click <b>No virtual cable</b> at the top to install VB-CABLE. Then in Discord set <b>Input Device</b> to <i>CABLE Output</i> (Windows) or <i>VB-Cable</i> (Mac), and turn off noise suppression and echo cancellation. Keep Echo Board open while you play.</p>
 
-      <h3>1. Install a virtual cable (one time)</h3>
-      <p>Easiest: click <b>No virtual cable</b> at the top (or Settings &rsaquo; Install&hellip;) and Echo Board installs VB-CABLE for you. Or install one yourself:</p>
-      <ul>
-        <li><b>Windows:</b> VB-Audio Virtual Cable. Install it, then restart your PC. <a href="#" data-link="https://vb-audio.com/Cable/">vb-audio.com/Cable</a></li>
-        <li><b>Mac:</b> VB-CABLE (same site) or BlackHole 2ch. <a href="#" data-link="https://existential.audio/blackhole/">existential.audio/blackhole</a></li>
-      </ul>
+      <h3>Pages and profiles</h3>
+      <p>Each profile has 8 pages of 64 pads. Switch pages with the tabs above the grid or the Launchpad's top row of buttons. Drag a pad onto a tab to move it to that page. Switch whole layouts with the profile button next to the logo.</p>
 
-      <h3>2. Point Echo Board at it</h3>
-      <p>In <b>Settings</b>, set <b>Send to</b> to <i>CABLE Input</i> (Windows) or <i>BlackHole 2ch</i> (Mac), and pick your real mic under <b>Your microphone</b>.</p>
+      <h3>Voice changer</h3>
+      <p>Click <b>Voice</b> at the top to pick an effect (Deep, Robot, Radio&hellip;). Toggle it from the right-side Launchpad buttons or a keyboard shortcut.</p>
 
-      <h3>3. Point Discord / the game at the cable</h3>
-      <p>Set the voice <b>Input Device</b> to <i>CABLE Output</i> (Windows) or <i>BlackHole 2ch</i> (Mac). Keep Echo Board open while you play.</p>
-      <p class="note">Tip: in Discord, turn off Krisp / noise suppression and set input sensitivity low (or use push-to-talk). Noise suppression treats music and sound effects as noise and can mute them.</p>
+      <h3>Instant replay</h3>
+      <p>Turn it on in Settings. Echo Board keeps the last 15&ndash;60 seconds in memory only. Press <b>Save replay</b> (top bar, the top-right round Launchpad button, or a shortcut) and the clip lands on an empty pad. Use <b>Trim</b> in the pad editor to cut it down.</p>
 
       <h3>Text to speech</h3>
-      <p>Type in the box under the pads and press <b>Enter</b> (Shift+Enter for a new line). The voice plays into voice chat just like a pad. <b>Free AI voices</b> are the default: natural-sounding voices that run on your computer at no cost (built in, works offline). <b>Save to pad</b> keeps the line as a sound on the selected pad, and recent lines appear as chips you can click to replay.</p>
+      <p>Type in the box under the pads and press <b>Enter</b>. Free AI voices are built in and run on your computer.</p>
 
-      <h3>Launchpad</h3>
-      <p>Newer Launchpads (X, Mini MK3, Pro MK3) are switched into Programmer mode automatically, so the 8&times;8 grid lines up and the pads light up in your colors. Any other MIDI controller works too: select a pad, press <b>Learn button</b>, then hit the button you want.</p>
-      <p class="note">Panic button: <b>Esc</b> stops everything, and <b>Ctrl+Shift+K</b> (<b>Cmd+Shift+K</b> on Mac) works even while a game is focused.</p>
+      <h3>Default Launchpad buttons</h3>
+      <ul>
+        <li><b>Top row (1&ndash;8):</b> pages</li>
+        <li><b>Right column, top:</b> save replay &middot; voice effect on/off &middot; next effect</li>
+        <li><b>Right column, bottom:</b> stop all sounds</li>
+      </ul>
+      <p class="note">Change these in Settings &rsaquo; Buttons &amp; shortcuts. <b>Esc</b> in the app and <b>Ctrl+Shift+K</b> (Cmd+Shift+K on Mac) anywhere stop all sounds.</p>
+
+      <h3>Privacy</h3>
+      <p>Echo Board can't connect to the internet. Everything stays on your computer.</p>
     </div>
   </div>
 
+  <div id="capture-hint" class="capture-hint hidden"></div>
   <div id="toast" class="toast"></div>
 
+  <script src="fx.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

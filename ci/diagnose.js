@@ -14,7 +14,15 @@ const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringif
 
 (async () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'eb-user-'));
-  const app = await _electron.launch({ executablePath: exe, args: [`--user-data-dir=${userData}`], timeout: 60000 });
+  const testVideo = path.join(os.tmpdir(), 'eb-video.wav');
+  {
+    const n = 48000 * 4, b = Buffer.alloc(44 + n * 2);
+    b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+    b.writeUInt32LE(48000, 24); b.writeUInt32LE(96000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+    for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / 20) * 9000), 44 + i * 2);
+    fs.writeFileSync(testVideo, b);
+  }
+  const app = await _electron.launch({ executablePath: exe, args: [`--user-data-dir=${userData}`], timeout: 60000, env: { ...process.env, ECHO_TEST_VIDEO: testVideo } });
   app.process().stdout.on('data', (d) => report.main.push('OUT ' + d.toString().trim()));
   app.process().stderr.on('data', (d) => report.main.push('ERR ' + d.toString().trim()));
   const win = await app.firstWindow();
@@ -93,6 +101,53 @@ const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringif
   await win.waitForTimeout(15000);
   step('after-speak', { ui: await ui(), status: await win.evaluate(() => [document.querySelector('#tts-status').textContent, document.querySelector('#toast').textContent, document.querySelector('#tts-history').children.length]) });
   await win.screenshot({ path: path.join(out, '3-after-speak.png') });
+
+  // ---- v0.5 features ----
+  step('privacy-window-fetch', await win.evaluate(async () => {
+    try { await fetch('https://example.com', { cache: 'no-store' }); return { blocked: false }; } catch (e) { return { blocked: true, error: String(e) }; }
+  }));
+  await call('privacy-main', 'privacyCheck');
+  await call('ptt-status', 'pttStatus');
+  step('ptt-press-F24', await win.evaluate(async () => {
+    try { await echo.pttPress('F24', true); await echo.pttPress('F24', false); return { ok: true }; } catch (e) { return { ok: false, error: String(e) }; }
+  }));
+  await call('hotkey-register', 'setHotkeys', [{ id: 'test', accel: 'Ctrl+Alt+F12' }, { id: 'action:stopAll', accel: 'CommandOrControl+Shift+K' }]);
+  step('engine-features', await win.evaluate(async () => {
+    try {
+      setFx({ on: true, effect: 'deep' });
+      setFx({ effect: 'robot' });
+      setFx({ on: false });
+      switchPage(2); const p3 = profile().page; switchPage(0);
+      return { ok: true, worklets: engine.worklets, fxReady: !!engine.fx, page3: p3, pages: document.querySelectorAll('.page-tab').length, actions: Object.keys(state.actions).length };
+    } catch (e) { return { ok: false, error: String(e && e.stack || e) }; }
+  }));
+  step('replay', await win.evaluate(async () => {
+    try {
+      state.settings.replay.enabled = true;
+      await startReplay();
+      await press(selected);
+      await new Promise((r) => setTimeout(r, 3000));
+      return { ok: true, mode: replay.mode, chunks: replay.chunks.length, node: !!replay.node, status: document.querySelector('#set-replay-status').textContent };
+    } catch (e) { return { ok: false, error: String(e && e.stack || e) }; }
+  }));
+  step('video-import', await win.evaluate(async () => {
+    try {
+      select(20);
+      await openVideoImport();
+      const v = document.querySelector('#vid');
+      await new Promise((res, rej) => { if (v.readyState >= 1) res(); v.addEventListener('loadedmetadata', res, { once: true }); v.addEventListener('error', () => rej(new Error('video error ' + (v.error && v.error.code))), { once: true }); setTimeout(() => rej(new Error('metadata timeout')), 10000); });
+      v.currentTime = 1;
+      await new Promise((r) => v.addEventListener('seeked', r, { once: true }));
+      document.querySelector('#vid-start').click();
+      v.currentTime = 2;
+      await new Promise((r) => v.addEventListener('seeked', r, { once: true }));
+      document.querySelector('#vid-end').click();
+      const range = document.querySelector('#vid-range').textContent;
+      await saveVideoClip();
+      return { ok: !!state.pads[20].file, range, name: state.pads[20].name, status: document.querySelector('#vid-status').textContent, duration: v.duration };
+    } catch (e) { return { ok: false, error: String(e && e.stack || e) }; }
+  }));
+  await win.screenshot({ path: path.join(out, '4-v05.png') });
 
   step('final', await ui());
   save();

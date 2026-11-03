@@ -1,6 +1,6 @@
 # Echo Board
 
-A Launchpad soundboard for Discord and game voice chat. Press a pad, and the sound plays through your mic so everyone in chat hears it. You hear it in your headphones too.
+A Launchpad soundboard for Discord and game voice chat, **100% offline**. Press a pad, and the sound plays through your mic so everyone in chat hears it. You hear it in your headphones too.
 
 Runs on **Windows** and **Mac** (same code, built on each machine).
 
@@ -66,12 +66,44 @@ Type in the box under the pads and press **Enter** (Shift+Enter for a new line).
 
 - **Free AI voices** (default): 28 natural US and UK voices from Kokoro, an open-source AI voice model that runs on your own computer. No account, no API key, no cost. Built into the installer and works offline. (When running from source, it downloads about 90 MB the first time.)
 - **Built-in voices**: free and offline (macOS voices on Mac, Windows voices on PC). Tip: on Mac, add better free voices in System Settings → Accessibility → Spoken Content → System Voice → Manage Voices (pick an "Enhanced" or "Premium" voice), then restart Echo Board.
-- **OpenAI voices** (optional, paid): AI voices, plus a **Voice style** line (e.g. "hyped sports announcer"). Needs an OpenAI API key.
-- **ElevenLabs voices** (optional, paid): AI voices, including any you've cloned. Needs an ElevenLabs API key.
-
-Paste API keys in **Settings → AI voices**. They're stored encrypted on your computer and only sent to that service. AI voices are billed to your account per character, so repeating a line from the chips below the box replays it without generating (or paying for) it again.
 
 **Save to pad** keeps the current line (or the last one spoken) as a sound on the selected pad, so you can fire it from the Launchpad.
+
+### Pages and profiles
+
+- **8 pages** of 64 pads per profile. Switch with the tabs above the grid, **PageUp/PageDown**, or the Launchpad's **top row** (buttons 1–8 = pages 1–8). Double-click a tab to rename it. Drag a pad onto a tab to move it to that page.
+- **Profiles** are whole layouts (all 8 pages). Use the profile button next to the logo to create, duplicate, rename, switch or delete them — e.g. one per game.
+
+### Voice changer
+
+Click **Voice** in the top bar: Deep, Demon, Chipmunk, Robot, Radio, Megaphone, Cave, Echo, Alien, Underwater, with an intensity slider and "hear myself". Only your voice is changed; sounds stay clean. Toggle it from the Launchpad (right column) or a keyboard shortcut.
+
+### Buttons & shortcuts
+
+Settings → **Buttons & shortcuts** sets Launchpad buttons and global keyboard shortcuts for: save replay, voice effect on/off, next effect, previous/next page, stop all. Defaults use the Launchpad's right-hand round buttons (top: replay, effect on/off, next effect; bottom: stop all). Any pad can also get a keyboard shortcut (pad editor → **Set shortcut**); shortcuts work even while a game is focused. Plain letters need Ctrl/Alt/Shift so normal typing isn't affected.
+
+### Auto push-to-talk
+
+If you use push-to-talk in Discord: Settings → **Auto push-to-talk**, pick your PTT key (or mouse button 4/5). Echo Board holds that one key while a sound or voice plays and lets go 0.3 s after. (Mac asks for Accessibility permission the first time.)
+
+### Instant replay
+
+Settings → **Instant replay** (off by default). When on, the last 15/30/60 seconds are kept **in memory only** — on Windows that's everything you hear (friends + your sounds), on Mac your sounds — plus your own voice if you choose. Press **Save replay** (top bar, Launchpad, or shortcut) and the clip lands on an empty pad. Nothing is written to disk until you save, and the buffer is discarded when you turn it off or close the app.
+
+### Trim, even volumes, video clips
+
+- **Trim:** the pad editor shows a waveform; drag the white edges to cut the start/end.
+- **Even out sound volumes** (Settings, on by default): quiet clips are boosted and loud ones softened so everything plays at a similar level.
+- **From video…** in the pad editor: open a video (MP4/WebM/MOV, e.g. a gaming recording), set start and end (up to 60 s), and save the audio to the pad.
+
+### Ducking & extra output
+
+- **Ducking:** lower your mic while a sound plays, and/or lower sounds while you talk.
+- **Extra output:** also send sounds (and optionally your voice) to a second device, e.g. for OBS.
+
+### Privacy
+
+Echo Board is **offline-only**: it is blocked from connecting to the internet at all (no accounts, telemetry, updates or cloud). The free AI voices and the VB-CABLE installer ship inside the installer. Settings → Privacy → **Check network block** confirms it. Links you click (e.g. vb-cable.com) open in your own browser.
 
 ### Launchpad
 
