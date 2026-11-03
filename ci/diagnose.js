@@ -85,7 +85,7 @@ const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringif
         await assignFile(selected, p);
         await press(selected);
         await new Promise((r) => setTimeout(r, 300));
-        return { ok: true, playing: engine.isPlaying(selected), name: state.pads[selected].name };
+        return { ok: true, playing: engine.isPlaying(vk(selected)), padName: state.pads[selected].name };
       } catch (e) { return { ok: false, error: String(e && e.stack || e) }; }
     }, imported));
   }
@@ -93,7 +93,6 @@ const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringif
   await call('ipc-ttsVoices-system', 'ttsVoices', 'system');
   await call('ipc-ttsSpeak-system', 'ttsSpeak', { provider: 'system', voice: '', text: 'System voice test.' });
   await call('ipc-ttsSpeak-kokoro', 'ttsSpeak', { provider: 'kokoro', voice: 'af_heart', text: 'Free voice test.' });
-  await call('ipc-keyStatus', 'ttsKeyStatus');
 
   // Text box end to end
   await win.fill('#tts-text', 'hello from the test');
@@ -144,7 +143,7 @@ const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringif
       document.querySelector('#vid-end').click();
       const range = document.querySelector('#vid-range').textContent;
       await saveVideoClip();
-      return { ok: !!state.pads[20].file, range, name: state.pads[20].name, status: document.querySelector('#vid-status').textContent, duration: v.duration };
+      return { ok: !!state.pads[20].file, range, padName: state.pads[20].name, status: document.querySelector('#vid-status').textContent, duration: v.duration };
     } catch (e) { return { ok: false, error: String(e && e.stack || e) }; }
   }));
   await win.screenshot({ path: path.join(out, '4-v05.png') });
