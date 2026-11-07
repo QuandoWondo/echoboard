@@ -10,6 +10,7 @@ const VOICE_EFFECTS = [
   { id: 'robot', name: 'Robot', icon: '⚙' },
   { id: 'radio', name: 'Radio', icon: '📻' },
   { id: 'megaphone', name: 'Megaphone', icon: '📣' },
+  { id: 'pilot', name: 'Pilot', icon: '✈' },
   { id: 'cave', name: 'Cave', icon: '⛰' },
   { id: 'echo', name: 'Echo', icon: '◎' },
   { id: 'alien', name: 'Alien', icon: '👽' },
@@ -87,6 +88,45 @@ class VoiceFX {
     p.parameters.get('ratio').value = ratio;
     return p;
   }
+  // Looping noise, brown-ish (deep rumble) when `brown` is true
+  noise(brown = true) {
+    const rate = this.ctx.sampleRate, len = rate * 2;
+    const b = this.ctx.createBuffer(1, len, rate);
+    const d = b.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      last = brown ? (last + 0.02 * w) / 1.02 : w;
+      d[i] = brown ? last * 3.5 : w;
+    }
+    const src = this.keep(this.ctx.createBufferSource());
+    src.buffer = b; src.loop = true; src.start();
+    return src;
+  }
+  // Follows how loud the input is (0..~1), for things that should only be heard while you talk
+  envelope(from, smoothHz = 6) {
+    const rect = this.keep(this.ctx.createWaveShaper());
+    const n = 1025, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) curve[i] = Math.abs((i * 2) / (n - 1) - 1);
+    rect.curve = curve;
+    const lp = this.filter('lowpass', smoothHz, 0.5);
+    from.connect(rect); rect.connect(lp);
+    return lp;
+  }
+  // Two-tone cabin chime ("ding-dong")
+  chime(dest = this.wet) {
+    const t = this.ctx.currentTime + 0.05;
+    [[659.25, 0], [523.25, 0.55]].forEach(([f, at]) => {
+      const o = this.keep(this.ctx.createOscillator());
+      const g = this.keep(this.ctx.createGain());
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t + at);
+      g.gain.linearRampToValueAtTime(0.35, t + at + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, t + at + 1.4);
+      o.connect(g); g.connect(dest);
+      o.start(t + at); o.stop(t + at + 1.5);
+    });
+  }
   delay(sec, max = 1) { const d = this.keep(this.ctx.createDelay(max)); d.delayTime.value = sec; return d; }
   reverb(seconds, decay) {
     const c = this.keep(this.ctx.createConvolver());
@@ -140,6 +180,24 @@ class VoiceFX {
       case 'megaphone':
         this.chain(i, this.filter('bandpass', 1700, 0.9), this.shaper(60), this.filter('highpass', 450), this.gain(0.6), w);
         break;
+      case 'pilot': {
+        // Cabin intercom: narrow, slightly crunchy speaker in a small metal tube...
+        const voice = this.chain(i, this.filter('highpass', 380, 0.8), this.filter('lowpass', 3400, 0.8),
+          this.filter('peaking', 1900, 1.2, 6), this.shaper(14), this.gain(0.6));
+        const room = this.delay(0.012, 0.05), roomFb = this.gain(0.25);
+        voice.at(-1).connect(w);
+        voice.at(-1).connect(room); room.connect(roomFb); roomFb.connect(room); roomFb.connect(w);
+        // ...with the engine rumble and air hiss of the cabin underneath, rising while you talk
+        const hum = this.noise(true), humTone = this.filter('lowpass', 420, 0.7);
+        const hiss = this.noise(false), hissTone = this.filter('bandpass', 5200, 0.6);
+        const bed = this.gain(0.02); // quiet when silent, so voice-activity in Discord isn't kept open
+        hum.connect(humTone); humTone.connect(bed);
+        hiss.connect(hissTone); hissTone.connect(this.gain(0.15)).connect(bed);
+        const env = this.envelope(i);
+        env.connect(this.gain(1.2)).connect(bed.gain);
+        bed.connect(w);
+        break;
+      }
       case 'cave': {
         const rev = this.reverb(3.2, 2.2);
         this.chain(i, rev, this.gain(1.6), w);

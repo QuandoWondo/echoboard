@@ -53,14 +53,15 @@ const DEFAULT_SETTINGS = {
   monitorVolume: 0.8,
   evenVolume: true,
   cableSetupShown: false,
-  tts: { provider: 'kokoro', voice: { kokoro: 'af_heart', system: '' }, v: 3 },
+  tts: { provider: 'kokoro', voice: { kokoro: 'af_heart', system: '', openai: 'alloy', elevenlabs: '' }, style: '', v: 3 },
   fx: { on: false, effect: 'deep', mix: 1, hearSelf: false },
   ptt: { enabled: false, code: null, tailMs: 300 },
   duck: { mic: false, micLevel: 0.35, sounds: false, soundsLevel: 0.4 },
   replay: { enabled: false, seconds: 30, includeMic: true },
   extra: { device: '', includeVoice: false },
 };
-const TTS_NAMES = { kokoro: 'Free AI', system: 'Built-in' };
+const TTS_NAMES = { kokoro: 'Free AI', system: 'Built-in', openai: 'OpenAI', elevenlabs: 'ElevenLabs' };
+const NEEDS_KEY = new Set(['openai', 'elevenlabs']); // online, optional: only with your own key
 
 const $ = (s) => document.querySelector(s);
 // `echo` (the bridge to the desktop side) is provided globally by preload.js; don't redeclare it.
@@ -166,6 +167,8 @@ class Engine {
     this.worklets = false;
     try { await this.main.audioWorklet.addModule('worklets.js'); this.worklets = true; }
     catch (e) { console.warn('Audio worklets unavailable', e); }
+    this.monWorklets = false;
+    try { await this.mon.audioWorklet.addModule('worklets.js'); this.monWorklets = true; } catch { /* playback pitch effects off */ }
 
     // Everything friends hear goes through one limiter, so voice + a loud sound never clip.
     const m = this.main;
@@ -303,6 +306,7 @@ class Engine {
 
   async shutdown() {
     this.stopAll();
+    if (typeof fxTest !== 'undefined' && fxTest.src) stopFxTest();
     if (this.mic) { this.mic.getTracks().forEach((t) => t.stop()); this.mic = null; }
     for (const c of [this.main, this.mon, this.extra]) { if (c) { try { await c.close(); } catch { /* ignore */ } } }
     this.main = this.mon = this.extra = null;
@@ -872,8 +876,17 @@ function capturePttKey(onDone) {
 const fxName = () => (VOICE_EFFECTS.find((e) => e.id === state.settings.fx.effect) || {}).name || 'Effect';
 
 function setFx(patch) {
+  const before = { ...state.settings.fx };
   Object.assign(state.settings.fx, patch);
   engine.applyFx(state.settings.fx);
+  const f = state.settings.fx;
+  // Cabin "ding-dong" when you switch to Pilot (not when audio restarts)
+  if (f.effect === 'pilot' && f.on && (before.effect !== 'pilot' || !before.on) && engine.fx) engine.fx.chime();
+  if (fxTest.preview) {
+    fxTest.preview.setEffect(f.effect);
+    fxTest.preview.setMix(f.mix);
+    if (f.effect === 'pilot' && before.effect !== 'pilot') fxTest.preview.chime();
+  }
   renderFx();
   ledActions();
   save();
@@ -894,7 +907,100 @@ function renderFx() {
   document.querySelectorAll('.fx-tile').forEach((t) => t.classList.toggle('on', t.dataset.id === f.effect));
 }
 
+/* ---- Test & playback: record your voice, hear it back with effects (headphones only) ---- */
+const fxTest = { samples: null, rate: 48000, recording: false, preview: null, src: null };
+
+function renderFxTest(status) {
+  const rec = $('#fx-rec'), play = $('#fx-play');
+  rec.disabled = fxTest.recording;
+  rec.textContent = fxTest.recording ? '● Recording…' : fxTest.samples ? '● Record again' : '● Record 5 seconds';
+  play.disabled = !fxTest.samples || fxTest.recording;
+  play.textContent = fxTest.src ? '■ Stop' : '▶ Play back';
+  if (status != null) $('#fx-test-status').textContent = status;
+}
+
+async function recordFxTest(seconds = 5) {
+  if (fxTest.recording) return;
+  stopFxTest();
+  fxTest.recording = true;
+  renderFxTest('Getting your mic…');
+  let ctx = null, stream = null;
+  try {
+    const mic = resolveMic();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: mic ? { exact: mic } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    ctx = new AudioContext({ sampleRate: 48000 });
+    await ctx.audioWorklet.addModule('worklets.js');
+    const src = ctx.createMediaStreamSource(stream);
+    const tap = new AudioWorkletNode(ctx, 'echo-replay-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+    const sink = ctx.createGain(); sink.gain.value = 0;
+    const chunks = [];
+    tap.port.onmessage = (e) => chunks.push(e.data);
+    src.connect(tap); tap.connect(sink); sink.connect(ctx.destination);
+    for (let t = seconds; t > 0; t--) {
+      renderFxTest(`Talk now… ${t}`);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    const total = chunks.reduce((n, c) => n + c.length, 0);
+    const out = new Float32Array(total);
+    let off = 0;
+    for (const c of chunks) { out.set(c, off); off += c.length; }
+    let peak = 0;
+    for (const x of out) { const a = Math.abs(x); if (a > peak) peak = a; }
+    fxTest.samples = out;
+    fxTest.rate = ctx.sampleRate;
+    fxTest.recording = false;
+    renderFxTest(peak < 0.003 ? "That was silent. Is the right mic picked in Settings?" : 'Got it. Press Play back.');
+    if (peak >= 0.003) playFxTest();
+  } catch (e) {
+    fxTest.recording = false;
+    renderFxTest("Couldn't record: " + errMsg(e));
+  } finally {
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (ctx) ctx.close().catch(() => {});
+  }
+}
+
+function stopFxTest() {
+  if (fxTest.src) { try { fxTest.src.stop(); } catch { /* ignore */ } }
+  fxTest.src = null;
+  if (fxTest.preview) { try { fxTest.preview.output.disconnect(); fxTest.preview.setEnabled(false); } catch { /* ignore */ } }
+  fxTest.preview = null;
+  renderFxTest();
+}
+
+function playFxTest() {
+  if (!fxTest.samples || !engine.mon) return;
+  if (fxTest.src) { stopFxTest(); renderFxTest(''); return; }
+  const mon = engine.mon;
+  const buf = mon.createBuffer(1, fxTest.samples.length, fxTest.rate);
+  buf.copyToChannel(fxTest.samples, 0);
+  const f = state.settings.fx;
+  const preview = new VoiceFX(mon, { pitchAvailable: engine.monWorklets });
+  preview.setEffect(f.effect);
+  preview.setMix(f.mix || 1);
+  preview.setEnabled(true);
+  const out = mon.createGain();
+  out.gain.value = Math.max(0.3, state.settings.monitorVolume);
+  preview.output.connect(out);
+  out.connect(mon.destination);
+  const src = mon.createBufferSource();
+  src.buffer = buf;
+  src.loop = $('#fx-loop').checked;
+  src.connect(preview.input);
+  src.onended = () => { if (fxTest.src === src) { fxTest.src = null; fxTest.preview = null; renderFxTest('Done. Pick another effect and play again.'); } };
+  fxTest.preview = preview;
+  fxTest.src = src;
+  if (f.effect === 'pilot') preview.chime();
+  src.start();
+  renderFxTest('Playing with ' + fxName() + '. Click other effects to compare.');
+}
+
 function wireFx() {
+  $('#fx-rec').addEventListener('click', () => recordFxTest(5));
+  $('#fx-play').addEventListener('click', playFxTest);
+  $('#fx-loop').addEventListener('change', (e) => { if (fxTest.src) fxTest.src.loop = e.target.checked; });
   const grid = $('#fx-grid');
   for (const e of VOICE_EFFECTS) {
     const b = document.createElement('button');
@@ -1943,7 +2049,7 @@ function restartAudio() {
 
 /* ---------------- Text to speech ---------------- */
 
-const tts = { voices: {}, busy: false, last: null, history: [], playing: null, loadSeq: 0, download: null };
+const tts = { voices: {}, keys: {}, busy: false, last: null, history: [], playing: null, loadSeq: 0, download: null };
 const ttsCfg = () => state.settings.tts;
 
 function sortVoices(list) {
@@ -1955,6 +2061,10 @@ function sortVoices(list) {
 async function loadTtsVoices(force) {
   const p = ttsCfg().provider;
   const seq = ++tts.loadSeq;
+  if (NEEDS_KEY.has(p) && !tts.keys[p]) {
+    fillSelect('#tts-voice', [{ v: '', t: 'Add API key in Settings' }], '');
+    return;
+  }
   if (!tts.voices[p] || force) {
     fillSelect('#tts-voice', [{ v: '', t: 'Loading voices…' }], '');
     try { tts.voices[p] = await echo.ttsVoices(p); }
@@ -1981,6 +2091,7 @@ function renderTts() {
   const s = ttsCfg();
   const text = $('#tts-text').value;
   $('#tts-provider').value = s.provider;
+  $('#tts-style').classList.toggle('hidden', s.provider !== 'openai');
   const count = $('#tts-count');
   count.textContent = text.length > 0 ? `${text.length} / ${TTS_MAX}` : '';
   count.classList.toggle('near', text.length > TTS_MAX * 0.9);
@@ -1988,7 +2099,9 @@ function renderTts() {
   speak.disabled = tts.busy || !text.trim();
   speak.textContent = !tts.busy ? 'Speak' : tts.download != null ? 'Loading voices…' : 'Generating…';
   const status = $('#tts-status');
-  status.textContent = tts.download != null ? `Loading voices… ${tts.download}%` : '';
+  status.textContent = tts.download != null ? `Loading voices… ${tts.download}%` : NEEDS_KEY.has(s.provider) ? 'Online voice' : '';
+  status.title = NEEDS_KEY.has(s.provider) ? `What you type for this voice is sent to ${TTS_NAMES[s.provider]}. Free AI and Built-in voices stay on your computer.` : '';
+  status.classList.toggle('online', NEEDS_KEY.has(s.provider) && tts.download == null);
   const saveBtn = $('#tts-save');
   saveBtn.disabled = tts.busy || (!text.trim() && !tts.last);
   saveBtn.textContent = 'Save to ' + padLabel(selected);
@@ -2031,15 +2144,21 @@ async function ttsGenerate(text) {
   text = (text || '').trim();
   if (!text || tts.busy) return null;
   const p = s.provider;
+  if (NEEDS_KEY.has(p) && !tts.keys[p]) {
+    openSettings('#key-' + p);
+    toast(`Add your ${TTS_NAMES[p]} API key to use those voices.`);
+    return null;
+  }
   const voice = s.voice[p] || '';
-  const key = [p, voice, text].join('\u0001');
+  const style = p === 'openai' ? (s.style || '').trim() : '';
+  const key = [p, voice, style, text].join('\u0001');
   const cached = tts.history.find((h) => h.key === key);
   if (cached) return cached;
 
   tts.busy = true;
   renderTts();
   try {
-    const file = await echo.ttsSpeak({ provider: p, voice, text });
+    const file = await echo.ttsSpeak({ provider: p, voice, text, style });
     const item = { key, text, file, label: ttsVoiceLabel(p, voice) };
     addHistory(item);
     return item;
@@ -2102,9 +2221,49 @@ function wireTts() {
     loadTtsVoices();
   });
   $('#tts-voice').addEventListener('change', (e) => {
-    ttsCfg().voice[ttsCfg().provider] = e.target.value;
+    const p = ttsCfg().provider;
+    if (NEEDS_KEY.has(p) && !tts.keys[p]) { openSettings('#key-' + p); return; }
+    ttsCfg().voice[p] = e.target.value;
     save();
   });
+  $('#tts-style').value = ttsCfg().style || '';
+  $('#tts-style').addEventListener('input', (e) => { ttsCfg().style = e.target.value; save(); });
+  $('#tts-style').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ttsSpeak(); } });
+
+  document.querySelectorAll('[data-savekey]').forEach((b) => b.addEventListener('click', () => {
+    const p = b.dataset.savekey;
+    const v = $(`#key-${p}`).value.trim();
+    if (!v) { toast('Paste a key first.'); return; }
+    saveKey(p, v);
+  }));
+  document.querySelectorAll('[data-removekey]').forEach((b) => b.addEventListener('click', () => saveKey(b.dataset.removekey, '')));
+  ['openai', 'elevenlabs'].forEach((p) => $(`#key-${p}`).addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') document.querySelector(`[data-savekey="${p}"]`).click();
+  }));
+}
+
+async function refreshKeyStatus() {
+  try { tts.keys = await echo.ttsKeyStatus(); } catch { tts.keys = {}; }
+  for (const p of ['openai', 'elevenlabs']) {
+    const has = !!tts.keys[p];
+    $(`#key-${p}-status`).textContent = has ? '✓ saved' : '';
+    $(`#key-${p}`).placeholder = has ? 'Saved. Paste a new key to replace it.' : (p === 'openai' ? 'sk-...' : 'Paste key');
+    document.querySelector(`[data-removekey="${p}"]`).classList.toggle('hidden', !has);
+  }
+}
+
+async function saveKey(p, value) {
+  try {
+    await echo.ttsSetKey(p, value);
+    $(`#key-${p}`).value = '';
+    tts.voices[p] = null;
+    await refreshKeyStatus();
+    toast(value ? `${TTS_NAMES[p]} key saved. Pick "${TTS_NAMES[p]} voices (online)" in the voice box.` : `${TTS_NAMES[p]} key removed.`);
+    if (ttsCfg().provider === p) loadTtsVoices(true);
+  } catch (e) {
+    toast(errMsg(e));
+  }
 }
 
 /* ---------------- Virtual cable setup ---------------- */
@@ -2163,6 +2322,7 @@ function wireCable() {
 }
 
 function openSettings(focusSel) {
+  refreshKeyStatus();
   renderMidiActivity();
   refreshAudioDevices();
   refreshMidiLists();
@@ -2240,6 +2400,7 @@ function wireSettings() {
     $('#' + id).classList.add('hidden');
     if (id === 'settings' && String(learnTarget).startsWith('action:')) cancelLearn();
     if (id === 'video') { const v = $('#vid'); v.pause(); }
+    if (id === 'fx') stopFxTest();
   };
   $('#btn-settings').addEventListener('click', () => openSettings());
   $('#btn-help').addEventListener('click', () => open('help'));
@@ -2327,7 +2488,7 @@ function wireKeys() {
     const tag = (e.target.tagName || '').toLowerCase();
     if (e.key === 'Escape') {
       const openOverlay = document.querySelector('.overlay:not(.hidden)');
-      if (openOverlay) { openOverlay.classList.add('hidden'); if (openOverlay.id === 'video') $('#vid').pause(); return; }
+      if (openOverlay) { openOverlay.classList.add('hidden'); if (openOverlay.id === 'video') $('#vid').pause(); if (openOverlay.id === 'fx') stopFxTest(); return; }
       stopAll();
       return;
     }
@@ -2363,8 +2524,7 @@ function loadState(saved) {
   state.settings = { ...base, ...ss };
   for (const k of ['tts', 'fx', 'ptt', 'duck', 'replay', 'extra']) state.settings[k] = { ...base[k], ...(ss[k] || {}) };
   state.settings.tts.voice = { ...base.tts.voice, ...((ss.tts && ss.tts.voice) || {}) };
-  if (!['kokoro', 'system'].includes(state.settings.tts.provider)) state.settings.tts.provider = 'kokoro'; // cloud voices were removed
-  delete state.settings.tts.style;
+  if (!TTS_NAMES[state.settings.tts.provider]) state.settings.tts.provider = 'kokoro';
 
   if (s.version === 2 && Array.isArray(s.profiles) && s.profiles.length) {
     state.profiles = s.profiles.map((p) => ({
@@ -2435,6 +2595,9 @@ async function boot() {
     new Promise((_, rej) => setTimeout(() => rej(new Error(name + ' timed out')), ms)),
   ]).catch((e) => console.error('Startup step failed:', name, e));
 
+  await step('API keys', refreshKeyStatus(), 4000);
+  // An online voice without a saved key can't speak: start on the free voices instead.
+  if (NEEDS_KEY.has(ttsCfg().provider) && !tts.keys[ttsCfg().provider]) { ttsCfg().provider = 'kokoro'; save(); renderTts(); }
   loadTtsVoices();
   syncHotkeys();
   await step('audio devices', refreshAudioDevices());

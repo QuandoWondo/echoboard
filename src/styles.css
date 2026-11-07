@@ -357,6 +357,10 @@ input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .action-row [data-key] { grid-area: key; }
 .action-row [data-clear] { grid-area: clear; }
 
+.fx-test { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.fx-test-head { font-weight: 800; font-size: 15px; }
+.check.inline { margin: 0 4px; }
+.tts-status.online { color: var(--warn); }
 .capture-hint {
   position: fixed; left: 50%; top: 70px; transform: translateX(-50%); z-index: 30;
   background: var(--text); color: #0f1419; font-weight: 700; padding: 10px 16px; border-radius: 9999px;

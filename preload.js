@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('echo', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   ttsVoices: (provider) => ipcRenderer.invoke('tts:voices', provider),
   ttsSpeak: (opts) => ipcRenderer.invoke('tts:speak', opts),
+  ttsKeyStatus: () => ipcRenderer.invoke('tts:key-status'),
+  ttsSetKey: (provider, key) => ipcRenderer.invoke('tts:set-key', provider, key),
   onTtsProgress: (cb) => ipcRenderer.on('tts:progress', (_e, pct) => cb(pct)),
   installCable: () => ipcRenderer.invoke('cable:install'),
   onCableStatus: (cb) => ipcRenderer.on('cable:status', (_e, t) => cb(t)),
@@ -22,5 +24,6 @@ contextBridge.exposeInMainWorld('echo', {
   replaySource: () => ipcRenderer.invoke('replay:source'),
   pttStatus: () => ipcRenderer.invoke('ptt:status'),
   pttPress: (code, down) => ipcRenderer.invoke('ptt:press', code, down),
+  privacyOnlineVoices: () => ipcRenderer.invoke('privacy:online-voices'),
   privacyCheck: () => ipcRenderer.invoke('privacy:check'),
 });

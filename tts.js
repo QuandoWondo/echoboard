@@ -5,7 +5,9 @@
    - kokoro:     Kokoro-82M neural voices running locally (free, no account;
                  ~92 MB model downloaded once, then works offline).
    - system:     macOS `say` / Windows SAPI voices. Free, offline.
-   Everything runs on this computer: nothing is sent anywhere. */
+   - openai:     OpenAI speech API (optional, your API key). ONLINE: sends the typed text to OpenAI.
+   - elevenlabs: ElevenLabs API (optional, your API key). ONLINE: sends the typed text to ElevenLabs.
+   Online providers only work through the narrow allow-list in privacy.js (onlineVoiceFetch). */
 
 const path = require('path');
 const fs = require('fs');
@@ -13,6 +15,9 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 
 const MAX_CHARS = 1000;
+const OPENAI_MODEL = 'gpt-4o-mini-tts';
+const OPENAI_VOICES = ['alloy', 'ash', 'ballad', 'cedar', 'coral', 'echo', 'fable', 'marin', 'nova', 'onyx', 'sage', 'shimmer', 'verse'];
+const ELEVEN_MODEL = 'eleven_flash_v2_5';
 const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 const KOKORO_VOICES = [
   'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole', 'af_nova', 'af_river', 'af_sarah', 'af_sky',
@@ -91,7 +96,7 @@ function encodeWav(samples, rate) {
     buf.writeInt16LE(Math.round(v < 0 ? v * 0x8000 : v * 0x7fff), 44 + i * 2);
   }
   return buf;
-}
+} // fast + cheap; 'eleven_multilingual_v2' is higher quality but slower
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -129,8 +134,21 @@ function parseWinVoices(out) {
   });
 }
 
+async function apiError(res) {
+  let msg = res.status + ' ' + res.statusText;
+  try {
+    const body = await res.text();
+    try {
+      const j = JSON.parse(body);
+      msg = (j.error && (j.error.message || j.error)) || (j.detail && (j.detail.message || j.detail)) || j.message || msg;
+    } catch { if (body) msg = body.slice(0, 200); }
+  } catch { /* ignore */ }
+  if (res.status === 401) msg = 'API key was rejected. Check it in Settings. (' + msg + ')';
+  return typeof msg === 'string' ? msg : JSON.stringify(msg);
+}
+
 function createTts({
-  dir, platform = process.platform,
+  dir, platform = process.platform, getKey = async () => '', fetchImpl = globalThis.fetch,
   modelsDir = null, bundledModelsDir = null, onProgress = () => {},
   importKokoro = () => import('kokoro-js'),
   importTransformers = () => import('@huggingface/transformers'),
@@ -207,6 +225,12 @@ function createTts({
 
   const newPath = (ext) => path.join(dir, Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex') + '.' + ext);
 
+  async function requireKey(provider, label) {
+    const key = await getKey(provider);
+    if (!key) throw new Error(`Add your ${label} API key in Settings first.`);
+    return key;
+  }
+
   async function voices(provider) {
     if (provider === 'kokoro') {
       loadKokoro().catch(() => {}); // warm up the bundled voice model in the background
@@ -223,6 +247,19 @@ function createTts({
           "$s.GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach-Object { $_.VoiceInfo.Name + '|' + $_.VoiceInfo.Culture.Name }; $s.Dispose()"));
       }
       throw new Error('Built-in voices work on Windows and Mac.');
+    }
+    if (provider === 'openai') {
+      return OPENAI_VOICES.map((v) => ({ id: v, name: v[0].toUpperCase() + v.slice(1), detail: '' }));
+    }
+    if (provider === 'elevenlabs') {
+      const key = await requireKey('elevenlabs', 'ElevenLabs');
+      const res = await fetchImpl('https://api.elevenlabs.io/v1/voices', {
+        headers: { 'xi-api-key': key }, signal: AbortSignal.timeout(20000),
+      });
+      if (!res.ok) throw new Error('ElevenLabs: ' + await apiError(res));
+      const data = await res.json();
+      return (data.voices || []).map((v) => ({ id: v.voice_id, name: v.name, detail: v.category || '' }))
+        .sort((a, b) => a.name.localeCompare(b.name));
     }
     throw new Error('Unknown voice provider: ' + provider);
   }
@@ -253,12 +290,50 @@ function createTts({
     return out;
   }
 
+  async function saveResponse(res, ext) {
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 100) throw new Error('The voice service returned no audio.');
+    const out = newPath(ext);
+    await fs.promises.writeFile(out, buf);
+    return out;
+  }
+
+  async function speakOpenAI(text, voice, style) {
+    const key = await requireKey('openai', 'OpenAI');
+    const body = { model: OPENAI_MODEL, voice: OPENAI_VOICES.includes(voice) ? voice : 'alloy', input: text, response_format: 'mp3' };
+    if (style) body.instructions = style.slice(0, 500);
+    const res = await fetchImpl('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!res.ok) throw new Error('OpenAI: ' + await apiError(res));
+    return saveResponse(res, 'mp3');
+  }
+
+  async function speakEleven(text, voice) {
+    const key = await requireKey('elevenlabs', 'ElevenLabs');
+    if (!voice) throw new Error('Pick an ElevenLabs voice first.');
+    const url = 'https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voice) + '?output_format=mp3_44100_128';
+    const res = await fetchImpl(url, {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      body: JSON.stringify({ text, model_id: ELEVEN_MODEL }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!res.ok) throw new Error('ElevenLabs: ' + await apiError(res));
+    return saveResponse(res, 'mp3');
+  }
+
   async function speak({ provider, voice, text, style } = {}) {
     text = String(text || '').trim().slice(0, MAX_CHARS);
     if (!text) throw new Error('Type something first.');
     await fs.promises.mkdir(dir, { recursive: true });
     if (provider === 'kokoro') return speakKokoro(text, voice);
     if (provider === 'system') return speakSystem(text, voice);
+    if (provider === 'openai') return speakOpenAI(text, voice, String(style || '').trim());
+    if (provider === 'elevenlabs') return speakEleven(text, voice);
     throw new Error('Unknown voice provider: ' + provider);
   }
 

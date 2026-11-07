@@ -32,10 +32,13 @@
 
       <section id="tts" class="tts">
         <textarea id="tts-text" rows="2" maxlength="1000" placeholder="Type something for voice chat to hear&hellip;"></textarea>
+        <input id="tts-style" class="tts-style hidden" type="text" maxlength="300" placeholder="Voice style (optional), e.g. hyped sports announcer, sleepy pirate">
         <div class="tts-bar">
           <select id="tts-provider" class="pill-select" title="Voice engine">
             <option value="kokoro">Free AI voices</option>
             <option value="system">Built-in voices</option>
+            <option value="openai">OpenAI voices (online)</option>
+            <option value="elevenlabs">ElevenLabs voices (online)</option>
           </select>
           <select id="tts-voice" class="pill-select" title="Voice"></select>
           <span id="tts-status" class="tts-status"></span>
@@ -163,8 +166,18 @@
       </div>
       <label class="check">
         <input id="fx-hear" type="checkbox">
-        <span>Hear myself (in my headphones) while setting it up</span>
+        <span>Hear myself live (in my headphones)</span>
       </label>
+      <div class="fx-test">
+        <div class="fx-test-head">Test &amp; playback</div>
+        <p class="note">Record a few seconds of your voice, then play it back with any effect. Click other effects while it plays to compare. Only you hear it, in your headphones.</p>
+        <div class="row">
+          <button id="fx-rec" class="btn">&#9679; Record 5 seconds</button>
+          <button id="fx-play" class="btn primary" disabled>&#9654; Play back</button>
+          <label class="check inline"><input id="fx-loop" type="checkbox" checked><span>Loop</span></label>
+          <span id="fx-test-status" class="muted"></span>
+        </div>
+      </div>
       <p class="note">Effects change only your voice; your soundboard sounds stay clean. Turn it on and off with the switch, a Launchpad button or a keyboard shortcut (Settings &rsaquo; Buttons &amp; shortcuts). Everything runs on this computer.</p>
     </div>
   </div>
@@ -327,8 +340,29 @@
         <span>Include my voice (with effects)</span>
       </label>
 
+      <h3>Online AI voices (optional)</h3>
+      <p class="note">Extra text-to-speech voices from OpenAI or ElevenLabs. <b>These are the only part of Echo Board that uses the internet:</b> when you pick one of them and press Speak, the text you typed is sent to that company to turn into speech (paid by usage on your account). Nothing else is ever sent. Leave the keys empty to stay 100% offline. Keys are stored encrypted on this computer.</p>
+      <div class="field">
+        <label for="key-openai">OpenAI API key <span id="key-openai-status" class="key-status"></span></label>
+        <div class="row nowrap">
+          <input id="key-openai" type="password" autocomplete="off" spellcheck="false" placeholder="sk-...">
+          <button class="btn" data-savekey="openai">Save</button>
+          <button class="btn ghost hidden" data-removekey="openai">Remove</button>
+        </div>
+        <p class="note">Get one at <a href="#" data-link="https://platform.openai.com/api-keys">platform.openai.com/api-keys</a></p>
+      </div>
+      <div class="field">
+        <label for="key-elevenlabs">ElevenLabs API key <span id="key-elevenlabs-status" class="key-status"></span></label>
+        <div class="row nowrap">
+          <input id="key-elevenlabs" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key">
+          <button class="btn" data-savekey="elevenlabs">Save</button>
+          <button class="btn ghost hidden" data-removekey="elevenlabs">Remove</button>
+        </div>
+        <p class="note">Get one at <a href="#" data-link="https://elevenlabs.io/app/settings/api-keys">elevenlabs.io &rsaquo; Settings &rsaquo; API keys</a></p>
+      </div>
+
       <h3>Privacy</h3>
-      <p class="note"><b>Echo Board is offline-only.</b> It is blocked from connecting to the internet: no accounts, no tracking, no cloud. Your sounds, voices, recordings and settings stay on this computer. Links you click (like vb-cable.com) open in your own browser.</p>
+      <p class="note"><b>Echo Board is offline-only.</b> It is blocked from connecting to the internet: no accounts, no tracking, no cloud. Your sounds, voices, recordings and settings stay on this computer. <b>One optional exception:</b> if you add an OpenAI or ElevenLabs key above and use those voices, the text you type goes to that service, and only to that service. Links you click (like vb-cable.com) open in your own browser.</p>
       <div class="row">
         <button id="set-privacy-check" class="btn">Check network block</button>
         <span id="set-privacy-result" class="muted"></span>
@@ -400,7 +434,7 @@
       <p class="note">Change these in Settings &rsaquo; Buttons &amp; shortcuts. <b>Esc</b> in the app and <b>Ctrl+Shift+K</b> (Cmd+Shift+K on Mac) anywhere stop all sounds.</p>
 
       <h3>Privacy</h3>
-      <p>Echo Board can't connect to the internet. Everything stays on your computer.</p>
+      <p>Echo Board can't connect to the internet. Everything stays on your computer. The only exception is the optional OpenAI / ElevenLabs voices, and only if you add your own key: then the text you type for those voices goes to that company.</p>
     </div>
   </div>
 

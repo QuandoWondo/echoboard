@@ -106,6 +106,11 @@ const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringif
     try { await fetch('https://example.com', { cache: 'no-store' }); return { blocked: false }; } catch (e) { return { blocked: true, error: String(e) }; }
   }));
   await call('privacy-main', 'privacyCheck');
+  await call('online-voices-reachable', 'privacyOnlineVoices');
+  step('pilot-effect', await win.evaluate(async () => {
+    try { setFx({ on: true, effect: 'pilot' }); const ok = engine.fx.effect === 'pilot'; setFx({ on: false }); return { ok }; }
+    catch (e) { return { ok: false, error: String(e) }; }
+  }));
   await call('ptt-status', 'pttStatus');
   step('ptt-press-F24', await win.evaluate(async () => {
     try { await echo.pttPress('F24', true); await echo.pttPress('F24', false); return { ok: true }; } catch (e) { return { ok: false, error: String(e) }; }

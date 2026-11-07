@@ -1,9 +1,9 @@
 'use strict';
 // Privacy first: lock down all network access before anything else loads.
-const { lockDownNode, blockWindowRequests, BLOCKED } = require('./privacy');
+const { lockDownNode, blockWindowRequests, onlineVoiceFetch, BLOCKED } = require('./privacy');
 lockDownNode();
 
-const { app, BrowserWindow, ipcMain, dialog, session, globalShortcut, systemPreferences, shell, protocol, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, globalShortcut, systemPreferences, shell, protocol, desktopCapturer, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -32,6 +32,31 @@ const configPath = () => path.join(app.getPath('userData'), 'echo-board.json');
 const soundsDir = () => path.join(app.getPath('userData'), 'sounds');
 // Voices and VB-CABLE shipped inside the installer (see scripts/fetch-bundled.js).
 const bundledDir = () => (app.isPackaged ? process.resourcesPath : path.join(__dirname, 'bundled'));
+
+const keysPath = () => path.join(app.getPath('userData'), 'echo-board-keys.json');
+const TTS_ONLINE = ['openai', 'elevenlabs'];
+
+/* ---- Optional online-voice API keys: encrypted with the OS keychain, never sent to the window ---- */
+let keyStore = null;
+async function loadKeys() {
+  if (keyStore) return keyStore;
+  try { keyStore = JSON.parse(await fs.promises.readFile(keysPath(), 'utf8')); } catch { keyStore = {}; }
+  return keyStore;
+}
+async function getKey(provider) {
+  const v = (await loadKeys())[provider];
+  if (!v) return '';
+  try { return v.enc ? safeStorage.decryptString(Buffer.from(v.data, 'base64')) : v.data; } catch { return ''; }
+}
+async function setKey(provider, key) {
+  if (!TTS_ONLINE.includes(provider)) throw new Error('Unknown provider');
+  const store = await loadKeys();
+  key = String(key || '').trim();
+  if (!key) delete store[provider];
+  else if (safeStorage.isEncryptionAvailable()) store[provider] = { enc: true, data: safeStorage.encryptString(key).toString('base64') };
+  else store[provider] = { enc: false, data: key };
+  await fs.promises.writeFile(keysPath(), JSON.stringify(store), { mode: 0o600 });
+}
 
 let tts = null;
 let win = null;
@@ -170,6 +195,12 @@ async function serveMedia(request) {
 /* ---- Voices ---- */
 ipcMain.handle('tts:voices', async (_e, provider) => tts.voices(provider));
 ipcMain.handle('tts:speak', async (_e, opts) => tts.speak(opts));
+ipcMain.handle('tts:key-status', async () => {
+  const out = {};
+  for (const p of TTS_ONLINE) out[p] = !!(await getKey(p));
+  return out;
+});
+ipcMain.handle('tts:set-key', async (_e, provider, key) => setKey(provider, key));
 
 /* ---- Virtual cable ---- */
 let cableJob = null;
@@ -215,7 +246,17 @@ ipcMain.handle('privacy:check', async () => {
   try { await fetch('https://example.com'); results.fetch = 'reachable'; } catch (e) { results.fetch = e.message.includes('offline-only') ? 'blocked' : 'error: ' + e.message; }
   try { require('https').get('https://example.com'); results.https = 'reachable'; } catch (e) { results.https = e.message.includes('offline-only') ? 'blocked' : 'error: ' + e.message; }
   try { require('net').connect(443, 'example.com'); results.socket = 'reachable'; } catch (e) { results.socket = e.message.includes('offline-only') ? 'blocked' : 'error: ' + e.message; }
+  try { await onlineVoiceFetch('https://example.com'); results.voiceAllowListOther = 'reachable'; } catch (e) { results.voiceAllowListOther = e.message.includes('offline-only') ? 'blocked' : 'error: ' + e.message; }
   return results;
+});
+// Automated tests only: confirm the optional online voices can actually reach their services.
+ipcMain.handle('privacy:online-voices', async () => {
+  const out = {};
+  for (const [name, url] of [['openai', 'https://api.openai.com/v1/models'], ['elevenlabs', 'https://api.elevenlabs.io/v1/models']]) {
+    try { const r = await onlineVoiceFetch(url, { signal: AbortSignal.timeout(15000) }); out[name] = 'reachable (' + r.status + ')'; }
+    catch (e) { out[name] = 'error: ' + (e.cause ? (e.cause.code || e.cause.message) : e.message); }
+  }
+  return out;
 });
 
 ipcMain.handle('open-external', async (_e, url) => {
@@ -247,6 +288,8 @@ app.whenReady().then(async () => {
     dir: path.join(app.getPath('userData'), 'tts-cache'),
     modelsDir: path.join(app.getPath('userData'), 'voice-models'),
     bundledModelsDir: path.join(bundledDir(), 'voice-models'),
+    getKey,
+    fetchImpl: onlineVoiceFetch, // only reaches OpenAI / ElevenLabs, only if you added a key
     onProgress: (pct) => send('tts:progress', pct),
   });
   await tts.clearCache(); // spoken clips are temporary; "Save to pad" copies them into the library
